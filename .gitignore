@@ -2,6 +2,7 @@
 build/
 dist/
 out/
+CLAUDE.md
 
 # Compiled Object files
 *.o
