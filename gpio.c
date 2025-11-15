@@ -208,7 +208,8 @@ double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, i
             // Check if timer expired
             if (pfds[1].revents & POLLIN) {
                 uint64_t expirations;
-                read(warmup_timerfd, &expirations, sizeof(expirations));
+                ssize_t ret = read(warmup_timerfd, &expirations, sizeof(expirations));
+                (void)ret;  // Intentionally ignoring read result (just consuming timer)
                 break;  // Warmup completed
             }
 
@@ -281,7 +282,8 @@ double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, i
             // Check if timer expired
             if (pfds[1].revents & POLLIN) {
                 uint64_t expirations;
-                read(measure_timerfd, &expirations, sizeof(expirations));
+                ssize_t ret = read(measure_timerfd, &expirations, sizeof(expirations));
+                (void)ret;  // Intentionally ignoring read result (just consuming timer)
                 measurement_completed = 1;
                 break;  // Measurement completed
             }
