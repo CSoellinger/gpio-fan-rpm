@@ -1,6 +1,6 @@
-# gpio-fan-rpm-cli
+# gpio-fan-rpm
 
-A C utility for measuring fan RPM using GPIO edge detection on Linux systems.
+A cli tool for measuring fan RPM using GPIO edge detection on Linux systems.
 
 ## Features
 
@@ -126,12 +126,7 @@ Connect your fan's tachometer wire to a GPIO pin on your device (Raspberry Pi, e
 ## Documentation
 
 - [BUILD.md](BUILD.md) - Detailed build instructions
-- [CLAUDE.md](CLAUDE.md) - Architecture and development guide
 
 ## License
 
 LGPL-3.0-or-later
-
-## Author
-
-CSoellinger (2025)
