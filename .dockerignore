@@ -1,0 +1,32 @@
+# Build artifacts
+build/
+dist/
+*.o
+*.a
+*.so
+gpio-fan-rpm
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed for build)
+*.md
+!CLAUDE.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Other
+*.tar.gz
+*.zip
