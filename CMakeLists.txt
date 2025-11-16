@@ -11,6 +11,13 @@ if(NOT DEFINED PKG_TAG)
 endif()
 message(STATUS "Package tag: ${PKG_TAG}")
 
+# Build timestamp (shown in --version output)
+# Can be overridden with: cmake -DBUILD_TIMESTAMP="2025-11-16 12:34:56" ..
+if(NOT DEFINED BUILD_TIMESTAMP)
+    string(TIMESTAMP BUILD_TIMESTAMP "%b %d %Y %H:%M:%S" UTC)
+endif()
+message(STATUS "Build timestamp: ${BUILD_TIMESTAMP}")
+
 # C standard
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -49,8 +56,11 @@ include_directories(
 # Executable
 add_executable(gpio-fan-rpm ${SOURCES})
 
-# Add version as compile definition
-target_compile_definitions(gpio-fan-rpm PRIVATE PKG_TAG=${PKG_TAG})
+# Add version and build timestamp as compile definitions
+target_compile_definitions(gpio-fan-rpm PRIVATE
+    PKG_TAG=${PKG_TAG}
+    BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
+)
 
 # Find required libraries
 find_package(Threads REQUIRED)

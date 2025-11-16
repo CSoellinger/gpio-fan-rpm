@@ -26,6 +26,10 @@
 #define PKG_TAG_STR STR(PKG_TAG)
 #endif
 
+#ifndef BUILD_TIMESTAMP
+#define BUILD_TIMESTAMP "unknown"
+#endif
+
 /**
  * @brief Safely convert string to integer with error checking
  *
@@ -253,10 +257,10 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
         case 'h': 
             print_usage(argv[0]); 
             return 1; // Special return to indicate help
-        case 'v': 
+        case 'v':
             printf("\n");
-            printf("%s: %s\n", argv[0], PKG_TAG_STR); 
-            printf("Build:        %s %s\n", __DATE__, __TIME__);
+            printf("%s: %s\n", argv[0], PKG_TAG_STR);
+            printf("Build:        %s\n", BUILD_TIMESTAMP);
             printf("\n");
 
             return 1; // Special return to indicate version
