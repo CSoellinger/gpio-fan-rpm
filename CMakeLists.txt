@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(gpio-fan-rpm C)
 
 # Version information
-set(PROJECT_VERSION "1.0.0" CACHE STRING "Project version")
+set(PROJECT_VERSION "dev" CACHE STRING "Project version")
 
 # Package tag (version string shown in binary)
 # Can be overridden with: cmake -DPKG_TAG=v1.2.3 ..
@@ -50,7 +50,7 @@ include_directories(
 add_executable(gpio-fan-rpm ${SOURCES})
 
 # Add version as compile definition
-target_compile_definitions(gpio-fan-rpm PRIVATE PKG_TAG=${PROJECT_VERSION})
+target_compile_definitions(gpio-fan-rpm PRIVATE PKG_TAG=${PKG_TAG})
 
 # Find required libraries
 find_package(Threads REQUIRED)
