@@ -76,22 +76,37 @@ line_request_t* line_request_events(struct gpiod_chip *chip, int gpio, const cha
     
     // Get event file descriptor
     req->event_fd = gpiod_line_request_get_fd(req->request);
-    
+
+    // Allocate reusable event buffer
+    req->event_buffer = gpiod_edge_event_buffer_new(1);
+    if (!req->event_buffer) {
+        gpiod_line_request_release(req->request);
+        gpiod_line_settings_free(settings);
+        gpiod_line_config_free(line_cfg);
+        gpiod_request_config_free(req_cfg);
+        free(req);
+        return NULL;
+    }
+
     // Clean up configuration objects
     gpiod_line_settings_free(settings);
     gpiod_line_config_free(line_cfg);
     gpiod_request_config_free(req_cfg);
-    
+
     return req;
 }
 
 void line_release(line_request_t *req) {
     if (!req) return;
-    
+
+    if (req->event_buffer) {
+        gpiod_edge_event_buffer_free(req->event_buffer);
+    }
+
     if (req->request) {
         gpiod_line_request_release(req->request);
     }
-    
+
     free(req);
 }
 
@@ -114,22 +129,11 @@ int line_wait_event(line_request_t *req, int64_t timeout_ns) {
 
 int line_read_event(line_request_t *req) {
     if (!req) return -1;
-    
-    if (!req->request) return -1;
-    
-    struct gpiod_edge_event_buffer *buffer = gpiod_edge_event_buffer_new(1);
-    if (!buffer) return -1;
-    
-    int ret = gpiod_line_request_read_edge_events(req->request, buffer, 1);
-    if (ret > 0) {
-        // Get the event from the buffer
-        struct gpiod_edge_event *event = gpiod_edge_event_buffer_get_event(buffer, 0);
-        if (event) {
-            // Process event if needed
-            // For now, we just count it
-        }
-    }
-    
-    gpiod_edge_event_buffer_free(buffer);
+
+    if (!req->request || !req->event_buffer) return -1;
+
+    int ret = gpiod_line_request_read_edge_events(req->request, req->event_buffer, 1);
+    // Note: We don't need to process the event details, just count it
+    // The buffer is reused across calls for efficiency
     return ret;
 } 

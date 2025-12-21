@@ -24,6 +24,7 @@
 #include "format.h"
 
 // Global variables (extern declaration - defined in main.c)
+// Note: sig_atomic_t is included via gpio.h -> signal.h
 extern volatile sig_atomic_t stop;
 extern pthread_mutex_t print_mutex;
 
@@ -63,40 +64,53 @@ gpio_context_t* gpio_init(int gpio, const char *chipname) {
 
 void gpio_cleanup(gpio_context_t *ctx) {
     if (!ctx) return;
-    
+
+    if (ctx->event_buffer) {
+        gpiod_edge_event_buffer_free(ctx->event_buffer);
+        ctx->event_buffer = NULL;
+    }
 
     if (ctx->request) {
         gpiod_line_request_release(ctx->request);
         ctx->request = NULL;
     }
     ctx->event_fd = -1;
-    
+
     if (ctx->chip) {
         chip_close(ctx->chip);
         ctx->chip = NULL;
     }
-    
+
     if (ctx->chipname) {
         free(ctx->chipname);
         ctx->chipname = NULL;
     }
-    
+
     free(ctx);
 }
 
 int gpio_request_events(gpio_context_t *ctx, const char *consumer) {
     if (!ctx || !ctx->chip) return -1;
-    
+
     // Use the line module to request events
     line_request_t *line_req = line_request_events(ctx->chip, ctx->gpio, consumer);
     if (!line_req) return -1;
-    
+
     ctx->request = line_req->request;
     ctx->event_fd = line_req->event_fd;
-    
+
     // Free the line request wrapper (but keep the underlying request)
     free(line_req);
-    
+
+    // Allocate reusable event buffer
+    ctx->event_buffer = gpiod_edge_event_buffer_new(1);
+    if (!ctx->event_buffer) {
+        gpiod_line_request_release(ctx->request);
+        ctx->request = NULL;
+        ctx->event_fd = -1;
+        return -1;
+    }
+
     return 0;
 }
 
@@ -119,23 +133,12 @@ int gpio_wait_event(gpio_context_t *ctx, int64_t timeout_ns) {
 
 int gpio_read_event(gpio_context_t *ctx) {
     if (!ctx) return -1;
-    
-    if (!ctx->request) return -1;
-    
-    struct gpiod_edge_event_buffer *buffer = gpiod_edge_event_buffer_new(1);
-    if (!buffer) return -1;
-    
-    int ret = gpiod_line_request_read_edge_events(ctx->request, buffer, 1);
-    if (ret > 0) {
-        // Get the event from the buffer
-        struct gpiod_edge_event *event = gpiod_edge_event_buffer_get_event(buffer, 0);
-        if (event) {
-            // Process event if needed
-            // For now, we just count it
-        }
-    }
-    
-    gpiod_edge_event_buffer_free(buffer);
+
+    if (!ctx->request || !ctx->event_buffer) return -1;
+
+    int ret = gpiod_line_request_read_edge_events(ctx->request, ctx->event_buffer, 1);
+    // Note: We don't need to process the event details, just count it
+    // The buffer is reused across calls for efficiency
     return ret;
 }
 
@@ -344,8 +347,10 @@ void* gpio_thread_fn(void *arg) {
         return NULL;
     }
     
-    // Request edge events
-    if (gpio_request_events(ctx, "gpio-fan-rpm") < 0) {
+    // Request edge events (include PID for unique identification)
+    char consumer[32];
+    snprintf(consumer, sizeof(consumer), "gpio-fan-rpm-%d", (int)getpid());
+    if (gpio_request_events(ctx, consumer) < 0) {
         pthread_mutex_lock(&print_mutex);
         fprintf(stderr, "Error: cannot request events for GPIO %d\n", a->gpio);
         pthread_mutex_unlock(&print_mutex);

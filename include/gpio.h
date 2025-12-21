@@ -14,6 +14,7 @@
 #include <gpiod.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <signal.h>  // For sig_atomic_t
 #include "format.h"  // For output_mode_t
 
 #ifdef __cplusplus
@@ -45,13 +46,14 @@ typedef struct {
 typedef struct gpio_context {
     struct gpiod_chip *chip;
     struct gpiod_line_request *request;
+    struct gpiod_edge_event_buffer *event_buffer;  /**< Reusable event buffer */
     int event_fd;
     int gpio;
     char *chipname;
 } gpio_context_t;
 
 // Global variables (extern declarations)
-extern volatile int stop;
+extern volatile sig_atomic_t stop;
 extern pthread_mutex_t print_mutex;
 
 
@@ -96,9 +98,9 @@ int gpio_wait_event(gpio_context_t *ctx, int64_t timeout_ns);
 
 /**
  * @brief Read edge event
- * 
+ *
  * @param ctx GPIO context
- * @return int 0 on success, -1 on error
+ * @return int Number of events read (>0), 0 if no events, -1 on error
  */
 int gpio_read_event(gpio_context_t *ctx);
 

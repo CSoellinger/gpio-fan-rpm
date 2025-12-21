@@ -23,6 +23,7 @@ extern "C" {
  */
 typedef struct line_request {
     struct gpiod_line_request *request;
+    struct gpiod_edge_event_buffer *event_buffer;  /**< Reusable event buffer */
     int event_fd;
     int gpio;
 } line_request_t;
@@ -55,9 +56,9 @@ int line_wait_event(line_request_t *req, int64_t timeout_ns);
 
 /**
  * @brief Read edge event
- * 
+ *
  * @param req Line request context
- * @return int 0 on success, -1 on error
+ * @return int Number of events read (>0), 0 if no events, -1 on error
  */
 int line_read_event(line_request_t *req);
 
