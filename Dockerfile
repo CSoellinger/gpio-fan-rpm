@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y \
     libtool \
     pkg-config \
     autoconf-archive \
-    libjson-c-dev \
     linux-headers-generic || true \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,10 +43,7 @@ RUN mkdir -p build && \
 # Runtime stage - minimal image
 FROM debian:bookworm-slim
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    libjson-c5 \
-    && rm -rf /var/lib/apt/lists/*
+RUN rm -rf /var/lib/apt/lists/*
 
 # Copy libgpiod v2 from builder (installed to /usr/lib)
 COPY --from=builder /usr/lib/libgpiod.so* /usr/lib/

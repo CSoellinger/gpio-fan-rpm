@@ -15,12 +15,14 @@
 #include <unistd.h>
 #include <math.h>
 #include <time.h>
-#include <json-c/json.h>
 #include "format.h"
+
+// Note: json-c dependency removed - simple JSON now uses snprintf directly
 
 // Buffer size constants
 #define NUMERIC_BUFFER_SIZE 32
 #define HUMAN_BUFFER_SIZE 64
+#define JSON_BUFFER_SIZE 64
 #define HOSTNAME_BUFFER_SIZE 256
 #define COLLECTD_BUFFER_SIZE 512
 
@@ -44,38 +46,25 @@ char* format_numeric(double rpm) {
 
 /**
  * @brief Format RPM and GPIO as JSON string (with newline)
- * 
+ *
+ * Uses simple snprintf for efficiency - avoids json-c object overhead
+ * which is significant in watch mode with repeated measurements.
+ *
  * @param gpio GPIO number
  * @param rpm RPM value to format
  * @return char* Formatted JSON string (caller must free), NULL on error
  */
 char* format_json(int gpio, double rpm) {
-    json_object *j = json_object_new_object();
-    if (!j) return NULL;
-    
-    json_object_object_add(j, "gpio", json_object_new_int(gpio));
-    json_object_object_add(j, "rpm", json_object_new_int((int)round(rpm)));
-    
-    const char *s = json_object_to_json_string_ext(j, JSON_C_TO_STRING_PLAIN);
-    if (!s) {
-        json_object_put(j);
-        return NULL;
-    }
-    
-    size_t len = strlen(s) + 2; // +2 for newline and null terminator
-    char *buf = malloc(len);
-    if (!buf) {
-        json_object_put(j);
-        return NULL;
-    }
-    
-    if (snprintf(buf, len, "%s\n", s) >= (int)len) {
+    char *buf = malloc(JSON_BUFFER_SIZE);
+    if (!buf) return NULL;
+
+    int written = snprintf(buf, JSON_BUFFER_SIZE,
+                          "{\"gpio\":%d,\"rpm\":%d}\n", gpio, (int)round(rpm));
+    if (written < 0 || written >= JSON_BUFFER_SIZE) {
         free(buf);
-        json_object_put(j);
         return NULL;
     }
-    
-    json_object_put(j);
+
     return buf;
 }
 

@@ -50,7 +50,6 @@ set(SOURCES
 # Include directory
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${JSON_C_INCLUDE_DIRS}
 )
 
 # Executable
@@ -64,13 +63,11 @@ target_compile_definitions(gpio-fan-rpm PRIVATE
 
 # Find required libraries
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
 
 # Find libgpiod (Linux-specific)
 find_library(GPIOD_LIBRARY gpiod)
 
-# Find json-c library
-pkg_check_modules(JSON_C REQUIRED json-c)
+# Note: json-c dependency removed - simple JSON now uses snprintf directly
 
 if(NOT GPIOD_LIBRARY)
     if(APPLE)
@@ -109,7 +106,6 @@ endif()
 # Link libraries
 target_link_libraries(gpio-fan-rpm
     ${GPIOD_LIBRARY}
-    ${JSON_C_LIBRARIES}
     Threads::Threads
     m
 )

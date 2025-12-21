@@ -10,12 +10,6 @@ libgpiod
 - Source: https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/
 - Description: Library for interacting with the GPIO character device
 
-libjson-c
-- License: MIT License
-- Copyright: 2009-2012 Eric Haszlakiewicz
-- Source: https://github.com/json-c/json-c
-- Description: JSON implementation in C
-
 libpthread
 - glibc: LGPL-2.1-or-later
 - musl: MIT License
