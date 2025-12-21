@@ -22,6 +22,8 @@
 
 int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
                           int duration, int pulses, int debug, output_mode_t mode) {
+    int chipname_allocated = 0;  // Track if we allocated chipname
+
     // Debug timing
     if (debug) {
         fprintf(stderr, "DEBUG: Starting measurement for %zu GPIOs\n", ngpio);
@@ -35,15 +37,11 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
         free(finished);
         return -1;
     }
-    
+
     // Synchronization primitives
     pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
     pthread_cond_t all_finished = PTHREAD_COND_INITIALIZER;
-    
-    // Reset for measurement
-    memset(finished, 0, ngpio * sizeof(*finished));
-    memset(results, 0, ngpio * sizeof(*results));
-    
+
     // Auto-detect chip once for all GPIOs if not specified
     if (!chipname) {
         if (chip_auto_detect_for_name(gpios[0], &chipname) < 0) {
@@ -54,6 +52,7 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
             free(finished);
             return -1;
         }
+        chipname_allocated = 1;  // We allocated chipname, must free it
     }
 
     pthread_t *threads = calloc(ngpio, sizeof(*threads));
@@ -63,6 +62,7 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
         pthread_cond_destroy(&all_finished);
         free(results);
         free(finished);
+        if (chipname_allocated) free(chipname);
         return -1;
     }
     
@@ -143,6 +143,7 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
     pthread_cond_destroy(&all_finished);
     free(results);
     free(finished);
-    
+    if (chipname_allocated) free(chipname);
+
     return 0;
 } 
