@@ -30,8 +30,7 @@ pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void signal_handler(int sig) {
     (void)sig;
     stop = 1;
-    // Add newline after interrupt for cleaner output
-    fprintf(stderr, " ");
+    // Note: Do not use fprintf() here - it's not async-signal-safe
 }
 
 /**
