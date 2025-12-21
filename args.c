@@ -132,17 +132,6 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
         *debug = 1;
     }
     
-    // Set reasonable limits to prevent resource exhaustion
-    if (*duration > 3600) {
-        fprintf(stderr, "Warning: Duration %d seconds is very long, limiting to 3600\n", *duration);
-        *duration = 3600;
-    }
-    
-    if (*ngpio > 10) {
-        fprintf(stderr, "Warning: Too many GPIOs (%zu), limiting to 10\n", *ngpio);
-        *ngpio = 10;
-    }
-    
     struct option longopts[] = {
         {"gpio", required_argument, 0, 'g'},
         {"chip", required_argument, 0, 'c'},
@@ -264,12 +253,18 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
             printf("\n");
 
             return 1; // Special return to indicate version
-        default: 
-            print_usage(argv[0]); 
+        default:
+            print_usage(argv[0]);
             return -1;
         }
     }
-    
+
+    // Check GPIO count limit after parsing (to prevent resource exhaustion)
+    if (*ngpio > 10) {
+        fprintf(stderr, "Warning: Too many GPIOs (%zu), limiting to 10\n", *ngpio);
+        *ngpio = 10;
+    }
+
     return 0;
 }
 
