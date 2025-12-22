@@ -89,11 +89,11 @@ void gpio_cleanup(gpio_context_t *ctx) {
     free(ctx);
 }
 
-int gpio_request_events(gpio_context_t *ctx, const char *consumer) {
+int gpio_request_events(gpio_context_t *ctx, const char *consumer, edge_type_t edge) {
     if (!ctx || !ctx->chip) return -1;
 
     // Use the line module to request events
-    line_request_t *line_req = line_request_events(ctx->chip, ctx->gpio, consumer);
+    line_request_t *line_req = line_request_events(ctx->chip, ctx->gpio, consumer, edge);
     if (!line_req) return -1;
 
     ctx->request = line_req->request;
@@ -144,89 +144,92 @@ int gpio_read_event(gpio_context_t *ctx) {
 
 /**
  * @brief Measure RPM using GPIO edge detection
- * 
+ *
  * This function performs a two-phase measurement:
- * 1. Warmup phase: 1 second for fan stabilization
- * 2. Measurement phase: (duration-1) seconds for actual RPM calculation
- * 
+ * 1. Warmup phase: configurable duration for fan stabilization
+ * 2. Measurement phase: (duration - warmup) seconds for actual RPM calculation
+ *
  * @param ctx GPIO context
  * @param pulses_per_rev Pulses per revolution
- * @param duration Total measurement duration in seconds (minimum 2)
+ * @param duration Total measurement duration in seconds
+ * @param warmup Warmup duration in seconds
  * @param debug Enable debug output
  * @return double RPM value, or -1.0 if interrupted
  */
-double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int debug) {
+double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int warmup, int debug) {
     if (!ctx) return 0.0;
-    
+
     struct timespec start_ts;
     unsigned int count = 0;
-    int warmup_duration = 1;  // Fixed 1-second warmup
+    int warmup_duration = warmup;
     int measurement_duration = duration - warmup_duration;
     int measurement_completed = 0;
     
-    // Warmup phase
-    clock_gettime(CLOCK_MONOTONIC, &start_ts);
-    if (debug) {
-        fprintf(stderr, "Warmup phase: %d seconds\n", warmup_duration);
-    }
-
-    // Create timer for warmup phase
-    int warmup_timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-    if (warmup_timerfd < 0) {
-        if (debug) fprintf(stderr, "Warning: failed to create warmup timer, using fallback\n");
-        // Fallback to old method
-        struct timespec warmup_end_ts = start_ts;
-        warmup_end_ts.tv_sec += warmup_duration;
-        while (!stop) {
-            struct timespec current_ts;
-            clock_gettime(CLOCK_MONOTONIC, &current_ts);
-            if (current_ts.tv_sec >= warmup_end_ts.tv_sec) break;
-            int wait_result = gpio_wait_event(ctx, 100000000LL);
-            if (wait_result > 0) gpio_read_event(ctx);
+    // Warmup phase (skip if warmup is 0)
+    if (warmup_duration > 0) {
+        clock_gettime(CLOCK_MONOTONIC, &start_ts);
+        if (debug) {
+            fprintf(stderr, "Warmup phase: %d seconds\n", warmup_duration);
         }
-    } else {
-        // Set timer to expire after warmup_duration seconds
-        struct itimerspec timer_spec = {0};
-        timer_spec.it_value.tv_sec = warmup_duration;
-        if (timerfd_settime(warmup_timerfd, 0, &timer_spec, NULL) < 0) {
-            if (debug) fprintf(stderr, "Warning: failed to arm warmup timer\n");
+
+        // Create timer for warmup phase
+        int warmup_timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+        if (warmup_timerfd < 0) {
+            if (debug) fprintf(stderr, "Warning: failed to create warmup timer, using fallback\n");
+            // Fallback to old method
+            struct timespec warmup_end_ts = start_ts;
+            warmup_end_ts.tv_sec += warmup_duration;
+            while (!stop) {
+                struct timespec current_ts;
+                clock_gettime(CLOCK_MONOTONIC, &current_ts);
+                if (current_ts.tv_sec >= warmup_end_ts.tv_sec) break;
+                int wait_result = gpio_wait_event(ctx, 100000000LL);
+                if (wait_result > 0) gpio_read_event(ctx);
+            }
+        } else {
+            // Set timer to expire after warmup_duration seconds
+            struct itimerspec timer_spec = {0};
+            timer_spec.it_value.tv_sec = warmup_duration;
+            if (timerfd_settime(warmup_timerfd, 0, &timer_spec, NULL) < 0) {
+                if (debug) fprintf(stderr, "Warning: failed to arm warmup timer\n");
+                close(warmup_timerfd);
+                return -1.0;
+            }
+
+            // Use poll() on both GPIO event_fd and timerfd
+            struct pollfd pfds[2];
+            pfds[0].fd = ctx->event_fd;
+            pfds[0].events = POLLIN;
+            pfds[1].fd = warmup_timerfd;
+            pfds[1].events = POLLIN;
+
+            while (!stop) {
+                int ret = poll(pfds, 2, 100);  // 100ms timeout for stop check
+                if (ret < 0) {
+                    if (errno == EINTR) continue;
+                    break;
+                }
+
+                // Check if timer expired
+                if (pfds[1].revents & POLLIN) {
+                    uint64_t expirations;
+                    ssize_t ret = read(warmup_timerfd, &expirations, sizeof(expirations));
+                    (void)ret;  // Intentionally ignoring read result (just consuming timer)
+                    break;  // Warmup completed
+                }
+
+                // Read GPIO events if available (discard during warmup)
+                if (pfds[0].revents & POLLIN) {
+                    gpio_read_event(ctx);
+                }
+            }
             close(warmup_timerfd);
-            return -1.0;
         }
 
-        // Use poll() on both GPIO event_fd and timerfd
-        struct pollfd pfds[2];
-        pfds[0].fd = ctx->event_fd;
-        pfds[0].events = POLLIN;
-        pfds[1].fd = warmup_timerfd;
-        pfds[1].events = POLLIN;
-
-        while (!stop) {
-            int ret = poll(pfds, 2, 100);  // 100ms timeout for stop check
-            if (ret < 0) {
-                if (errno == EINTR) continue;
-                break;
-            }
-
-            // Check if timer expired
-            if (pfds[1].revents & POLLIN) {
-                uint64_t expirations;
-                ssize_t ret = read(warmup_timerfd, &expirations, sizeof(expirations));
-                (void)ret;  // Intentionally ignoring read result (just consuming timer)
-                break;  // Warmup completed
-            }
-
-            // Read GPIO events if available (discard during warmup)
-            if (pfds[0].revents & POLLIN) {
-                gpio_read_event(ctx);
-            }
+        // Check if interrupted during warmup
+        if (stop) {
+            return -1.0; // Interrupted during warmup
         }
-        close(warmup_timerfd);
-    }
-
-    // Check if interrupted during warmup
-    if (stop) {
-        return -1.0; // Interrupted during warmup
     }
     
     // Measurement phase - run for full measurement duration
@@ -350,7 +353,7 @@ void* gpio_thread_fn(void *arg) {
     // Request edge events (include PID for unique identification)
     char consumer[32];
     snprintf(consumer, sizeof(consumer), "gpio-fan-rpm-%d", (int)getpid());
-    if (gpio_request_events(ctx, consumer) < 0) {
+    if (gpio_request_events(ctx, consumer, a->edge) < 0) {
         pthread_mutex_lock(&print_mutex);
         fprintf(stderr, "Error: cannot request events for GPIO %d\n", a->gpio);
         pthread_mutex_unlock(&print_mutex);
@@ -361,12 +364,12 @@ void* gpio_thread_fn(void *arg) {
     
     // Warmup once for watch mode
     if (a->watch) {
-        gpio_measure_rpm(ctx, a->pulses, a->duration, a->debug);
+        gpio_measure_rpm(ctx, a->pulses, a->duration, a->warmup, a->debug);
     }
     
     // Measurement loop
     do {
-        double rpm = gpio_measure_rpm(ctx, a->pulses, a->duration, a->debug);
+        double rpm = gpio_measure_rpm(ctx, a->pulses, a->duration, a->warmup, a->debug);
         
 
         
@@ -415,7 +418,7 @@ void* gpio_thread_fn(void *arg) {
             } else {
                 // Fallback: direct output if no synchronization primitives available
                 pthread_mutex_lock(&print_mutex);
-                char *output = format_output(a->gpio, rpm, a->mode, a->duration);
+                char *output = format_output(a->gpio, rpm, NULL, a->mode, a->duration);
                 if (output) {
                     printf("%s", output);
                     free(output);

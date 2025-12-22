@@ -22,6 +22,7 @@
 #include "gpio.h"
 #include "chip.h"
 #include "format.h"
+#include "stats.h"
 #include <math.h>
 
 // External variable for signal handling
@@ -119,7 +120,7 @@ static void* keyboard_monitor_thread(void *arg) {
 }
 
 int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
-                   int duration, int pulses, int debug, output_mode_t mode) {
+                   int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode) {
     int chipname_allocated = 0;  // Track if we allocated chipname
 
     // Print watch mode info
@@ -132,15 +133,22 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
         return -1;
     }
 
-    // Allocate result storage
+    // Allocate result storage and statistics
     double *results = calloc(ngpio, sizeof(*results));
     int *finished = calloc(ngpio, sizeof(*finished));
-    if (!results || !finished) {
+    rpm_stats_t *stats = calloc(ngpio, sizeof(*stats));
+    if (!results || !finished || !stats) {
         fprintf(stderr, "Error: memory allocation failed\n");
         free(threads);
         free(results);
         free(finished);
+        free(stats);
         return -1;
+    }
+
+    // Initialize statistics for each GPIO
+    for (size_t i = 0; i < ngpio; i++) {
+        stats_init(&stats[i]);
     }
 
     // Synchronization primitives
@@ -156,6 +164,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
             free(threads);
             free(results);
             free(finished);
+            free(stats);
             return -1;
         }
         chipname_allocated = 1;  // We allocated chipname, must free it
@@ -181,6 +190,8 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
         a->chipname = chipname;
         a->duration = duration;
         a->pulses = pulses;
+        a->warmup = warmup;
+        a->edge = edge;
         a->debug = debug;
         a->watch = 1; // Always true for watch mode
         a->mode = mode;
@@ -229,19 +240,28 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
         
         // Only output if we weren't interrupted
         if (!stop) {
+            // Update statistics for each GPIO
+            for (size_t i = 0; i < ngpio; i++) {
+                stats_update(&stats[i], results[i]);
+            }
+
             // Output results in order
             if (mode == MODE_JSON && ngpio > 1) {
-                // Output as JSON array
+                // Output as JSON array with stats
                 printf("[");
                 for (size_t i = 0; i < ngpio; i++) {
                     if (i > 0) printf(",");
-                    printf("{\"gpio\":%d,\"rpm\":%d}", gpios[i], (int)round(results[i]));
+                    double avg = stats_avg(&stats[i]);
+                    printf("{\"gpio\":%d,\"rpm\":%d,\"min\":%d,\"max\":%d,\"avg\":%d}",
+                           gpios[i], (int)round(results[i]),
+                           (int)round(stats[i].min), (int)round(stats[i].max),
+                           (int)round(avg));
                 }
                 printf("]\n");
             } else {
-                // Output individual results in order
+                // Output individual results in order with stats
                 for (size_t i = 0; i < ngpio; i++) {
-                    char *output = format_output(gpios[i], results[i], mode, duration);
+                    char *output = format_output(gpios[i], results[i], &stats[i], mode, duration);
                     if (output) {
                         printf("%s", output);
                         free(output);
@@ -249,7 +269,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
                 }
             }
             fflush(stdout);
-            
+
             // Reset finished flags for next round
             memset(finished, 0, ngpio * sizeof(*finished));
         }
@@ -275,6 +295,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
     free(threads);
     free(results);
     free(finished);
+    free(stats);
     if (chipname_allocated) free(chipname);
 
     return 0;

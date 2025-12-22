@@ -19,6 +19,18 @@ extern "C" {
 #endif
 
 /**
+ * @brief Edge detection type
+ *
+ * Default is EDGE_BOTH (value 0) to maintain backward compatibility
+ * when struct is zero-initialized.
+ */
+typedef enum {
+    EDGE_BOTH = 0,   /**< Detect both rising and falling edges (default) */
+    EDGE_RISING,     /**< Detect rising edges only */
+    EDGE_FALLING     /**< Detect falling edges only */
+} edge_type_t;
+
+/**
  * @brief Line request context for version compatibility
  */
 typedef struct line_request {
@@ -30,13 +42,14 @@ typedef struct line_request {
 
 /**
  * @brief Request line for edge events
- * 
+ *
  * @param chip GPIO chip
  * @param gpio GPIO line number
  * @param consumer Consumer name
+ * @param edge Edge detection type (EDGE_BOTH, EDGE_RISING, EDGE_FALLING)
  * @return line_request_t* Line request context or NULL on error
  */
-line_request_t* line_request_events(struct gpiod_chip *chip, int gpio, const char *consumer);
+line_request_t* line_request_events(struct gpiod_chip *chip, int gpio, const char *consumer, edge_type_t edge);
 
 /**
  * @brief Release line request

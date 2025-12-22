@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <limits.h>
 #include "args.h"
+#include "line.h"  // For edge_type_t
 
 #ifndef PKG_TAG
 #define PKG_TAG_STR "unknown"
@@ -57,12 +58,13 @@ static int safe_str_to_int(const char *str, int *result) {
 }
 
 // Function to load default values from environment variables
-int load_defaults(int *duration, int *pulses) {
+int load_defaults(int *duration, int *pulses, int *warmup) {
     // Check environment variables first (highest precedence)
     const char *env_duration = getenv("GPIO_FAN_RPM_DURATION");
     const char *env_pulses = getenv("GPIO_FAN_RPM_PULSES");
+    const char *env_warmup = getenv("GPIO_FAN_RPM_WARMUP");
     const char *env_debug = getenv("DEBUG");
-    
+
     if (env_duration) {
         int temp;
         if (safe_str_to_int(env_duration, &temp) == 0) {
@@ -78,7 +80,15 @@ int load_defaults(int *duration, int *pulses) {
         }
         // Silently ignore invalid env values
     }
-    
+
+    if (env_warmup) {
+        int temp;
+        if (safe_str_to_int(env_warmup, &temp) == 0) {
+            *warmup = temp;
+        }
+        // Silently ignore invalid env values
+    }
+
     // Return debug flag if set
     if (env_debug && (strcmp(env_debug, "1") == 0 || strcmp(env_debug, "true") == 0)) {
         return 1; // Debug enabled
@@ -97,8 +107,10 @@ void print_usage(const char *prog) {
     
     printf("Options:\n");
     printf("  -c, --chip=NAME        GPIO chip name (default: auto-detect)\n");
-    printf("  -d, --duration=SEC     Measurement duration in seconds (default: 2, min: 2)\n");
+    printf("  -d, --duration=SEC     Measurement duration in seconds (default: 2)\n");
     printf("  -p, --pulses=N         Pulses per revolution (default: 4)\n");
+    printf("  --warmup=SEC           Warmup duration in seconds (default: 1, max: 60)\n");
+    printf("  -e, --edge=TYPE        Edge detection: rising, falling, both (default: both)\n");
     printf("  -w, --watch            Continuous monitoring mode\n");
     printf("  -n, --numeric          Output RPM as numeric value only\n");
     printf("  -j, --json             Output as JSON object/array\n");
@@ -106,6 +118,10 @@ void print_usage(const char *prog) {
     printf("  --debug                Show detailed measurement information\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -v, --version          Show version information\n\n");
+
+    printf("Edge Detection:\n");
+    printf("  Using 'rising' or 'falling' counts half the pulses of 'both'.\n");
+    printf("  Adjust --pulses accordingly (e.g., use --pulses=2 instead of 4).\n\n");
     
     printf("Watch Mode:\n");
     printf("  In watch mode, press 'q' to quit gracefully or Ctrl+C to interrupt.\n");
@@ -121,22 +137,24 @@ void print_usage(const char *prog) {
     printf("\n");
 }
 
-int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio, 
-                   char **chipname, int *duration, int *pulses, 
-                   int *debug, int *watch, output_mode_t *mode) {
+int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
+                   char **chipname, int *duration, int *pulses, int *warmup,
+                   edge_type_t *edge, int *debug, int *watch, output_mode_t *mode) {
     int opt;
-    
+
     // Load defaults first
-    int env_debug = load_defaults(duration, pulses);
+    int env_debug = load_defaults(duration, pulses, warmup);
     if (env_debug > 0) {
         *debug = 1;
     }
-    
+
     struct option longopts[] = {
         {"gpio", required_argument, 0, 'g'},
         {"chip", required_argument, 0, 'c'},
         {"duration", required_argument, 0, 'd'},
         {"pulses", required_argument, 0, 'p'},
+        {"warmup", required_argument, 0, 'W'},
+        {"edge", required_argument, 0, 'e'},
         {"numeric", no_argument, 0, 'n'},
         {"json", no_argument, 0, 'j'},
         {"collectd", no_argument, 0, 'C'},
@@ -146,8 +164,8 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
         {"version", no_argument, 0, 'v'},
         {0, 0, 0, 0}
     };
-    
-    while ((opt = getopt_long(argc, argv, "g:c:d:p:njCDwhv", longopts, NULL)) != -1) {
+
+    while ((opt = getopt_long(argc, argv, "g:c:d:p:e:njCDwhv", longopts, NULL)) != -1) {
         switch (opt) {
         case 'g':
             // Validate GPIO number format
@@ -199,14 +217,49 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
                 fprintf(stderr, "Try: %s --help\n\n", argv[0]);
                 return -1;
             }
-            if (*duration < 2) {
-                fprintf(stderr, "\nError: duration must be at least 2 seconds for accurate measurements\n");
-                fprintf(stderr, "  Minimum 2s allows for 1s warmup + 1s measurement\n");
-                fprintf(stderr, "  For quick tests, try: %s --duration=2\n\n", argv[0]);
+            if (*duration > 3600) {
+                fprintf(stderr, "\nError: duration must be at most 3600 seconds\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
                 return -1;
             }
-            if (*duration > 3600) {
-                fprintf(stderr, "\nError: duration must be between 2 and 3600 seconds\n\n");
+            if (*duration < 1) {
+                fprintf(stderr, "\nError: duration must be at least 1 second\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+            break;
+        case 'W':
+            if (!optarg || *optarg == '\0') {
+                fprintf(stderr, "\nError: --warmup requires a number\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+            if (safe_str_to_int(optarg, warmup) != 0) {
+                fprintf(stderr, "\nError: --warmup must be a valid number, got '%s'\n\n", optarg);
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+            if (*warmup < 0 || *warmup > 60) {
+                fprintf(stderr, "\nError: warmup must be between 0 and 60 seconds\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+            break;
+        case 'e':
+            if (!optarg || *optarg == '\0') {
+                fprintf(stderr, "\nError: --edge requires a value (rising, falling, or both)\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+            if (strcmp(optarg, "rising") == 0) {
+                *edge = EDGE_RISING;
+            } else if (strcmp(optarg, "falling") == 0) {
+                *edge = EDGE_FALLING;
+            } else if (strcmp(optarg, "both") == 0) {
+                *edge = EDGE_BOTH;
+            } else {
+                fprintf(stderr, "\nError: invalid edge type '%s'\n", optarg);
+                fprintf(stderr, "  Valid values: rising, falling, both\n\n");
                 fprintf(stderr, "Try: %s --help\n\n", argv[0]);
                 return -1;
             }
@@ -268,16 +321,15 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
     return 0;
 }
 
-int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, const char *prog) {
-    (void)duration;  // Unused parameter - validation done during parsing
+int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, int warmup, const char *prog) {
     (void)pulses;    // Unused parameter - validation done during parsing
-    
+
     if (ngpio == 0) {
         fprintf(stderr, "\nError: at least one --gpio required\n\n");
         fprintf(stderr, "Try: %s --help\n\n", prog);
         return -1;
     }
-    
+
     // Check for duplicate GPIOs
     for (size_t i = 0; i < ngpio; i++) {
         for (size_t j = i + 1; j < ngpio; j++) {
@@ -288,6 +340,15 @@ int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, const
             }
         }
     }
-    
+
+    // Validate duration vs warmup relationship
+    if (duration < warmup + 1) {
+        fprintf(stderr, "\nError: duration (%d) must be at least warmup + 1 second (%d)\n", duration, warmup + 1);
+        fprintf(stderr, "  Current: %ds warmup + %ds measurement = %ds minimum duration\n",
+                warmup, 1, warmup + 1);
+        fprintf(stderr, "  Try: %s --duration=%d or --warmup=%d\n\n", prog, warmup + 1, duration - 1);
+        return -1;
+    }
+
     return 0;
 } 

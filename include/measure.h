@@ -20,18 +20,20 @@ extern "C" {
 
 /**
  * @brief Run single measurement mode for multiple GPIO pins
- * 
+ *
  * @param gpios Array of GPIO numbers
  * @param ngpio Number of GPIOs
  * @param chipname GPIO chip name
  * @param duration Measurement duration
  * @param pulses Pulses per revolution
+ * @param warmup Warmup duration in seconds
+ * @param edge Edge detection type
  * @param debug Debug flag
  * @param mode Output mode
  * @return int 0 on success, -1 on error
  */
 int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
-                          int duration, int pulses, int debug, output_mode_t mode);
+                          int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode);
 
 #ifdef __cplusplus
 }

@@ -21,7 +21,7 @@
 #include <math.h>
 
 int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
-                          int duration, int pulses, int debug, output_mode_t mode) {
+                          int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode) {
     int chipname_allocated = 0;  // Track if we allocated chipname
 
     // Debug timing
@@ -78,6 +78,8 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
         a->chipname = chipname;
         a->duration = duration;
         a->pulses = pulses;
+        a->warmup = warmup;
+        a->edge = edge;
         a->debug = debug;
         a->watch = 0; // Always false for single measurement
         a->mode = mode;
@@ -129,7 +131,7 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
             continue;
         }
 
-        char *output = format_output(gpios[i], results[i], mode, duration);
+        char *output = format_output(gpios[i], results[i], NULL, mode, duration);
         if (output) {
             printf("%s", output);
             free(output);

@@ -43,6 +43,7 @@ set(SOURCES
     chip.c
     line.c
     format.c
+    stats.c
     measure.c
     watch.c
 )

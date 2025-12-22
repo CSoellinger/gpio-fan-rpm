@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <signal.h>  // For sig_atomic_t
 #include "format.h"  // For output_mode_t
+#include "line.h"    // For edge_type_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,8 @@ typedef struct {
     char *chipname;              /**< GPIO chip name (NULL for auto-detect) */
     int duration;                /**< Total measurement duration in seconds */
     int pulses;                  /**< Pulses per revolution */
+    int warmup;                  /**< Warmup duration in seconds */
+    edge_type_t edge;            /**< Edge detection type */
     int debug;                   /**< Enable debug output */
     int watch;                   /**< Continuous monitoring mode */
     output_mode_t mode;          /**< Output format mode */
@@ -80,12 +83,13 @@ void gpio_cleanup(gpio_context_t *ctx);
 
 /**
  * @brief Request edge events on GPIO line
- * 
+ *
  * @param ctx GPIO context
  * @param consumer Consumer name for the request
+ * @param edge Edge detection type (EDGE_BOTH, EDGE_RISING, EDGE_FALLING)
  * @return int 0 on success, -1 on error
  */
-int gpio_request_events(gpio_context_t *ctx, const char *consumer);
+int gpio_request_events(gpio_context_t *ctx, const char *consumer, edge_type_t edge);
 
 /**
  * @brief Wait for edge event with timeout
@@ -110,10 +114,11 @@ int gpio_read_event(gpio_context_t *ctx);
  * @param ctx GPIO context
  * @param pulses_per_rev Pulses per revolution
  * @param duration Total measurement duration in seconds
+ * @param warmup Warmup duration in seconds
  * @param debug Enable debug output
  * @return double RPM value, -1.0 if interrupted, 0.0 if no pulses detected
  */
-double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int debug);
+double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int warmup, int debug);
 
 /**
  * @brief Thread function for GPIO measurement
