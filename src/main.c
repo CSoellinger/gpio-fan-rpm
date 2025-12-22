@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     }
 
     // Validate arguments
-    if (validate_arguments(gpios, ngpio, duration, pulses, warmup, argv[0]) != 0) {
+    if (validate_arguments(gpios, ngpio, duration, warmup, argv[0]) != 0) {
         free(gpios);
         if (chipname) free(chipname);
         return 1;

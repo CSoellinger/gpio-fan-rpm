@@ -317,9 +317,7 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
     return 0;
 }
 
-int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, int warmup, const char *prog) {
-    (void) pulses;    // Unused parameter - validation done during parsing
-
+int validate_arguments(int *gpios, size_t ngpio, int duration, int warmup, const char *prog) {
     if (ngpio == 0) {
         fprintf(stderr, "\nError: at least one --gpio required\n\n");
         fprintf(stderr, "Try: %s --help\n\n", prog);

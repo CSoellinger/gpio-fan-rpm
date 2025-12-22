@@ -50,12 +50,11 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
  * @param gpios Array of GPIO numbers
  * @param ngpio Number of GPIOs
  * @param duration Measurement duration
- * @param pulses Pulses per revolution
  * @param warmup Warmup duration
  * @param prog Program name for error messages
  * @return int 0 on success, -1 on error
  */
-int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, int warmup, const char *prog);
+int validate_arguments(int *gpios, size_t ngpio, int duration, int warmup, const char *prog);
 
 #ifdef __cplusplus
 }
