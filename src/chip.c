@@ -1,11 +1,7 @@
 /**
- * @file chip.c
- * @brief GPIO chip management operations implementation
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module implements GPIO chip operations
+ * 
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
@@ -99,8 +95,7 @@ size_t chip_get_num_lines(struct gpiod_chip *chip) {
 }
 
 /**
- * @brief Get chip name from chip info
- *
+ * Get chip name from chip info
  * NOTE: Currently unused but reserved for future debugging/informational features.
  *
  * @param chip Chip object
@@ -120,8 +115,7 @@ __attribute__((unused)) char* chip_get_name(struct gpiod_chip *chip) {
 }
 
 /**
- * @brief Get chip label from chip info
- *
+ * Get chip label from chip info
  * NOTE: Currently unused but reserved for future debugging/informational features.
  *
  * @param chip Chip object

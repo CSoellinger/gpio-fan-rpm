@@ -1,12 +1,8 @@
 /**
- * @file args.c
- * @brief Command-line argument parsing and help functionality
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module handles command-line argument parsing, validation,
  * and help output for the gpio-fan-rpm utility.
+ * 
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
@@ -32,8 +28,7 @@
 #endif
 
 /**
- * @brief Safely convert string to integer with error checking
- *
+ * Safely convert string to integer with error checking
  * @param str String to convert
  * @param result Pointer to store result
  * @return int 0 on success, -1 on error
@@ -57,7 +52,6 @@ static int safe_str_to_int(const char *str, int *result) {
     return 0;
 }
 
-// Function to load default values from environment variables
 int load_defaults(int *duration, int *pulses, int *warmup) {
     // Check environment variables first (highest precedence)
     const char *env_duration = getenv("GPIO_FAN_RPM_DURATION");
@@ -322,7 +316,7 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
 }
 
 int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, int warmup, const char *prog) {
-    (void)pulses;    // Unused parameter - validation done during parsing
+    (void) pulses;    // Unused parameter - validation done during parsing
 
     if (ngpio == 0) {
         fprintf(stderr, "\nError: at least one --gpio required\n\n");

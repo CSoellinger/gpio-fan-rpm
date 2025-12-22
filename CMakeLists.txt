@@ -43,20 +43,20 @@ endif()
 
 # Source files
 set(SOURCES
-    main.c
-    args.c
-    gpio.c
-    chip.c
-    line.c
-    format.c
-    stats.c
-    measure.c
-    watch.c
+    src/main.c
+    src/args.c
+    src/gpio.c
+    src/chip.c
+    src/line.c
+    src/format.c
+    src/stats.c
+    src/measure.c
+    src/watch.c
 )
 
 # Include directory
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/include
 )
 
 # Executable
