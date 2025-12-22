@@ -16,10 +16,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Edge detection type
- *
- * Default is EDGE_BOTH (value 0) to maintain backward compatibility
- * when struct is zero-initialized.
+ * Edge detection type (EDGE_BOTH is default for zero-initialized structs)
  */
 typedef enum {
     EDGE_BOTH = 0,   /**< Detect both rising and falling edges (default) */
@@ -28,7 +25,7 @@ typedef enum {
 } edge_type_t;
 
 /**
- * @brief Line request context for version compatibility
+ * Line request context for version compatibility
  */
 typedef struct line_request {
     struct gpiod_line_request *request;
@@ -38,26 +35,26 @@ typedef struct line_request {
 } line_request_t;
 
 /**
- * @brief Request line for edge events
+ * Request line for edge events
  *
  * @param chip GPIO chip
  * @param gpio GPIO line number
  * @param consumer Consumer name
- * @param edge Edge detection type (EDGE_BOTH, EDGE_RISING, EDGE_FALLING)
+ * @param edge Edge detection type
  * @return line_request_t* Line request context or NULL on error
  */
 line_request_t* line_request_events(struct gpiod_chip *chip, int gpio, const char *consumer, edge_type_t edge);
 
 /**
- * @brief Release line request
- * 
+ * Release line request
+ *
  * @param req Line request context
  */
 void line_release(line_request_t *req);
 
 /**
- * @brief Wait for edge event
- * 
+ * Wait for edge event
+ *
  * @param req Line request context
  * @param timeout_ns Timeout in nanoseconds
  * @return int 0 on timeout, 1 on event, -1 on error
@@ -65,10 +62,10 @@ void line_release(line_request_t *req);
 int line_wait_event(line_request_t *req, int64_t timeout_ns);
 
 /**
- * @brief Read edge event
+ * Read edge event
  *
  * @param req Line request context
- * @return int Number of events read (>0), 0 if no events, -1 on error
+ * @return int Number of events read, 0 if none, -1 on error
  */
 int line_read_event(line_request_t *req);
 

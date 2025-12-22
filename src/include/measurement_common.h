@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Measurement context for shared state between threads
+ * Measurement context for shared state between threads
  */
 typedef struct {
     double *results;              /**< Array of measurement results */
@@ -34,7 +34,7 @@ typedef struct {
 } measurement_ctx_t;
 
 /**
- * @brief Measurement parameters passed to threads
+ * Measurement parameters passed to threads
  */
 typedef struct {
     int *gpios;                   /**< Array of GPIO numbers */
@@ -49,10 +49,7 @@ typedef struct {
 } measurement_params_t;
 
 /**
- * @brief Initialize measurement context
- *
- * Allocates results, finished, and threads arrays; initializes mutex and cond;
- * auto-detects chipname if not provided.
+ * Initialize measurement context
  *
  * @param ctx Context to initialize
  * @param gpios Array of GPIO numbers
@@ -63,7 +60,7 @@ typedef struct {
 int measurement_ctx_init(measurement_ctx_t *ctx, int *gpios, size_t ngpio, char *chipname);
 
 /**
- * @brief Create measurement threads for all GPIOs
+ * Create measurement threads for all GPIOs
  *
  * @param ctx Initialized measurement context
  * @param params Measurement parameters
@@ -72,16 +69,14 @@ int measurement_ctx_init(measurement_ctx_t *ctx, int *gpios, size_t ngpio, char 
 int measurement_create_threads(measurement_ctx_t *ctx, const measurement_params_t *params);
 
 /**
- * @brief Join all measurement threads
+ * Join all measurement threads
  *
  * @param ctx Measurement context
  */
 void measurement_join_threads(measurement_ctx_t *ctx);
 
 /**
- * @brief Clean up measurement context
- *
- * Destroys mutex/cond, frees arrays and chipname if allocated.
+ * Clean up measurement context
  *
  * @param ctx Measurement context
  */

@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /**
- * @brief RPM statistics structure for tracking min/max/average
+ * RPM statistics structure for tracking min/max/average
  */
 typedef struct {
     double min;           /**< Minimum RPM value observed */
@@ -24,14 +24,14 @@ typedef struct {
 } rpm_stats_t;
 
 /**
- * @brief Initialize statistics structure
+ * Initialize statistics structure
  *
  * @param stats Pointer to statistics structure
  */
 void stats_init(rpm_stats_t *stats);
 
 /**
- * @brief Update statistics with new RPM value
+ * Update statistics with new RPM value
  *
  * @param stats Pointer to statistics structure
  * @param rpm New RPM value to incorporate
@@ -39,7 +39,7 @@ void stats_init(rpm_stats_t *stats);
 void stats_update(rpm_stats_t *stats, double rpm);
 
 /**
- * @brief Calculate average RPM from statistics
+ * Calculate average RPM from statistics
  *
  * @param stats Pointer to statistics structure
  * @return double Average RPM, or 0.0 if no measurements

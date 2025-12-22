@@ -23,7 +23,7 @@ typedef enum {
 } output_mode_t;
 
 /**
- * @brief Format RPM as numeric string (with newline)
+ * Format RPM as numeric string
  *
  * @param rpm RPM value to format
  * @return char* Formatted string (caller must free), NULL on error
@@ -31,31 +31,27 @@ typedef enum {
 char* format_numeric(double rpm);
 
 /**
- * @brief Format RPM and GPIO as JSON string (with newline)
- *
- * If stats is provided, includes min/max/avg fields.
+ * Format RPM and GPIO as JSON string
  *
  * @param gpio GPIO number
  * @param rpm RPM value to format
  * @param stats Optional statistics (NULL for basic output)
- * @return char* Formatted JSON string (caller must free), NULL on error
+ * @return char* Formatted string (caller must free), NULL on error
  */
 char* format_json(int gpio, double rpm, const rpm_stats_t *stats);
 
 /**
- * @brief Format RPM and GPIO as collectd PUTVAL string (with newline)
+ * Format RPM and GPIO as collectd PUTVAL string
  *
  * @param gpio GPIO number
  * @param rpm RPM value to format
- * @param duration Measurement duration in seconds
- * @return char* Formatted collectd string (caller must free), NULL on error
+ * @param duration Measurement duration
+ * @return char* Formatted string (caller must free), NULL on error
  */
 char* format_collectd(int gpio, double rpm, int duration);
 
 /**
- * @brief Format human-readable output
- *
- * If stats is provided, includes min/max/avg in parentheses.
+ * Format human-readable output
  *
  * @param gpio GPIO number
  * @param rpm RPM value to format
@@ -65,15 +61,13 @@ char* format_collectd(int gpio, double rpm, int duration);
 char* format_human_readable(int gpio, double rpm, const rpm_stats_t *stats);
 
 /**
- * @brief Format RPM output according to specified mode
- *
- * Helper function that dispatches to appropriate formatting function.
+ * Format RPM output according to specified mode
  *
  * @param gpio GPIO number
  * @param rpm RPM value to format
  * @param stats Optional statistics (NULL for basic output)
  * @param mode Output format mode
- * @param duration Measurement duration (used for collectd format)
+ * @param duration Measurement duration (for collectd)
  * @return char* Formatted string (caller must free), NULL on error
  */
 char* format_output(int gpio, double rpm, const rpm_stats_t *stats, output_mode_t mode, int duration);

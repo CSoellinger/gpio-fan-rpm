@@ -145,13 +145,13 @@ int gpio_read_event(gpio_context_t *ctx) {
  * This function performs a two-phase measurement:
  * 1. Warmup phase: configurable duration for fan stabilization
  * 2. Measurement phase: (duration - warmup) seconds for actual RPM calculation
- *
+ * 
  * @param ctx GPIO context
  * @param pulses_per_rev Pulses per revolution
- * @param duration Total measurement duration in seconds
- * @param warmup Warmup duration in seconds
+ * @param duration Total measurement duration
+ * @param warmup Warmup duration
  * @param debug Enable debug output
- * @return double RPM value, or -1.0 if interrupted
+ * @return double RPM value, -1.0 if interrupted, 0.0 if no pulses
  */
 double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int warmup, int debug) {
     if (!ctx) return 0.0;

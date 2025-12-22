@@ -16,14 +16,14 @@ extern "C" {
 #include "gpio.h"
 
 /**
- * @brief Run continuous monitoring mode for multiple GPIO pins
+ * Run continuous monitoring mode for multiple GPIO pins
  *
  * @param gpios Array of GPIO numbers
  * @param ngpio Number of GPIOs
  * @param chipname GPIO chip name
  * @param duration Measurement duration
  * @param pulses Pulses per revolution
- * @param warmup Warmup duration in seconds
+ * @param warmup Warmup duration
  * @param edge Edge detection type
  * @param debug Debug flag
  * @param mode Output mode
