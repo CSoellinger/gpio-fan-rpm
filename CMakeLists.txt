@@ -50,6 +50,7 @@ set(SOURCES
     src/line.c
     src/format.c
     src/stats.c
+    src/measurement_common.c
     src/measure.c
     src/watch.c
 )

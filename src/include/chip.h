@@ -1,26 +1,8 @@
 /**
- * @file chip.h
- * @brief GPIO chip management operations
- * @author CSoellinger
- * @date 2025
+ * This module handles GPIO chip operations.
+ *
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
- *
- * This module handles GPIO chip operations
- *
- * @section return_values Return Value Conventions
- *
- * This project follows consistent return value patterns:
- *
- * - **int functions**: Return 0 on success, -1 on error
- *   - Exception: parse_arguments() returns 1 for help/version
- *   - Wait functions: 0=timeout, 1=event ready, -1=error
- *
- * - **Pointer functions**: Return valid pointer on success, NULL on error
- *   - Allocated strings must be freed by caller (documented with @note)
- *
- * - **size_t functions**: Return count on success, 0 on error
- *
- * - **double functions**: Return measured value, -1.0 on interrupt, 0.0 if no data
  */
 
 #ifndef CHIP_H

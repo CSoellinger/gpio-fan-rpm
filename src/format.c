@@ -2,7 +2,7 @@
  * This module provides functions to format RPM measurements in various
  * output formats including human-readable, JSON, numeric, and collectd.
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 

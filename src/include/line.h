@@ -1,11 +1,8 @@
 /**
- * @file line.h
- * @brief GPIO line operations
- * @author CSoellinger
- * @date 2025
+ * This module handles GPIO line operations.
+ *
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
- * 
- * This module handles GPIO line operations
  */
 
 #ifndef LINE_H

@@ -1,110 +1,52 @@
 /**
  * This module handles single measurement mode with parallel
  * measurement and ordered output for multiple GPIO pins.
- * 
- * @author CSoellinger
+ *
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <pthread.h>
-#include <errno.h>
-#include "measure.h"
-#include "gpio.h"
-#include "format.h"
-#include "chip.h"
 #include <math.h>
+#include "measure.h"
+#include "measurement_common.h"
+#include "format.h"
 
 int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
                           int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode) {
-    int chipname_allocated = 0;  // Track if we allocated chipname
+    measurement_ctx_t ctx;
 
-    // Debug timing
     if (debug) {
         fprintf(stderr, "DEBUG: Starting measurement for %zu GPIOs\n", ngpio);
     }
-    // Single measurement mode - simpler approach
-    double *results = calloc(ngpio, sizeof(*results));
-    int *finished = calloc(ngpio, sizeof(*finished));
-    if (!results || !finished) {
-        fprintf(stderr, "Error: memory allocation failed\n");
-        free(results);
-        free(finished);
+
+    // Initialize context (allocates arrays, mutex/cond, auto-detects chip)
+    if (measurement_ctx_init(&ctx, gpios, ngpio, chipname) < 0) {
         return -1;
     }
 
-    // Synchronization primitives
-    pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
-    pthread_cond_t all_finished = PTHREAD_COND_INITIALIZER;
+    // Set up parameters and create threads
+    measurement_params_t params = {
+        .gpios = gpios,
+        .ngpio = ngpio,
+        .duration = duration,
+        .pulses = pulses,
+        .warmup = warmup,
+        .edge = edge,
+        .debug = debug,
+        .watch = 0,  // Single measurement
+        .mode = mode
+    };
 
-    // Auto-detect chip once for all GPIOs if not specified
-    if (!chipname) {
-        if (chip_auto_detect_for_name(gpios[0], &chipname) < 0) {
-            fprintf(stderr, "Error: cannot auto-detect GPIO chip\n");
-            pthread_mutex_destroy(&results_mutex);
-            pthread_cond_destroy(&all_finished);
-            free(results);
-            free(finished);
-            return -1;
-        }
-        chipname_allocated = 1;  // We allocated chipname, must free it
-    }
-
-    pthread_t *threads = calloc(ngpio, sizeof(*threads));
-    if (!threads) {
-        fprintf(stderr, "Error: memory allocation failed\n");
-        pthread_mutex_destroy(&results_mutex);
-        pthread_cond_destroy(&all_finished);
-        free(results);
-        free(finished);
-        if (chipname_allocated) free(chipname);
+    if (measurement_create_threads(&ctx, &params) < 0) {
+        measurement_ctx_cleanup(&ctx);
         return -1;
     }
-    
-    // Create threads for each GPIO
-    for (size_t i = 0; i < ngpio; i++) {
-        thread_args_t *a = calloc(1, sizeof(*a));
-        if (!a) {
-            fprintf(stderr, "Error: memory allocation failed\n");
-            continue;
-        }
-        
-        a->gpio = gpios[i];
-        a->chipname = chipname;
-        a->duration = duration;
-        a->pulses = pulses;
-        a->warmup = warmup;
-        a->edge = edge;
-        a->debug = debug;
-        a->watch = 0; // Always false for single measurement
-        a->mode = mode;
-        a->thread_index = i;
-        a->total_threads = ngpio;
-        a->results = results;
-        a->finished = finished;
-        a->results_mutex = &results_mutex;
-        a->all_finished = &all_finished;
-        
-        int ret = pthread_create(&threads[i], NULL, gpio_thread_fn, a);
-        if (ret) {
-            fprintf(stderr, "Error: cannot create thread for GPIO %d: %s\n", 
-                    a->gpio, strerror(ret));
-            free(a);
-            threads[i] = 0;
-        }
-    }
-    
+
     // Wait for all threads to finish
-    for (size_t i = 0; i < ngpio; i++) {
-        if (threads[i]) {
-            pthread_join(threads[i], NULL);
-        }
-    }
-    
-    free(threads);
-    
+    measurement_join_threads(&ctx);
+
     // Output results in order
     if (mode == MODE_JSON && ngpio > 1) {
         // Output as JSON array
@@ -112,37 +54,31 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
         int first = 1;
         for (size_t i = 0; i < ngpio; i++) {
             // Skip interrupted measurements (negative values indicate interruption)
-            if (results[i] < 0.0) {
+            if (ctx.results[i] < 0.0) {
                 continue;
             }
             if (!first) printf(",");
-            printf("{\"gpio\":%d,\"rpm\":%d}", gpios[i], (int)round(results[i]));
+            printf("{\"gpio\":%d,\"rpm\":%d}", gpios[i], (int)round(ctx.results[i]));
             first = 0;
         }
         printf("]\n");
     } else {
-            // Output individual results in order
-    for (size_t i = 0; i < ngpio; i++) {
-        // Skip interrupted measurements (negative values indicate interruption)
-        if (results[i] < 0.0) {
-            continue;
-        }
+        // Output individual results in order
+        for (size_t i = 0; i < ngpio; i++) {
+            // Skip interrupted measurements (negative values indicate interruption)
+            if (ctx.results[i] < 0.0) {
+                continue;
+            }
 
-        char *output = format_output(gpios[i], results[i], NULL, mode, duration);
-        if (output) {
-            printf("%s", output);
-            free(output);
+            char *output = format_output(gpios[i], ctx.results[i], NULL, mode, duration);
+            if (output) {
+                printf("%s", output);
+                free(output);
+            }
         }
-    }
     }
     fflush(stdout);
-    
-    // Cleanup
-    pthread_mutex_destroy(&results_mutex);
-    pthread_cond_destroy(&all_finished);
-    free(results);
-    free(finished);
-    if (chipname_allocated) free(chipname);
 
+    measurement_ctx_cleanup(&ctx);
     return 0;
-} 
+}

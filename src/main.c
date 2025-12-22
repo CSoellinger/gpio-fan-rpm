@@ -2,7 +2,7 @@
  * This module orchestrates the RPM measurement process by parsing arguments,
  * setting up signal handling, and delegating to appropriate measurement modules.
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
@@ -94,4 +94,4 @@ int main(int argc, char **argv) {
     }
     
     return exit_code;
-} 
+}

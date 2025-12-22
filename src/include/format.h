@@ -1,12 +1,9 @@
 /**
- * @file format.h
- * @brief Output formatting functions for RPM measurements
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- *
  * This module provides functions to format RPM measurements in various
  * output formats including human-readable, JSON, numeric, and collectd.
+ *
+ * @author  CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #ifndef FORMAT_H

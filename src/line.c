@@ -1,7 +1,7 @@
 /**
  * This module implements GPIO line operations
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
@@ -148,4 +148,4 @@ int line_read_event(line_request_t *req) {
     // Note: We don't need to process the event details, just count it
     // The buffer is reused across calls for efficiency
     return ret;
-} 
+}

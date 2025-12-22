@@ -1,11 +1,8 @@
 /**
- * @file gpio.h
- * @brief GPIO interface for fan RPM measurement
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
+ * This module provides a unified interface for GPIO operations.
  *
- * This module provides a unified interface for GPIO operations
+ * @author  CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #ifndef GPIO_H

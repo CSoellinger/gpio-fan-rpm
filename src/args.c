@@ -2,7 +2,7 @@
  * This module handles command-line argument parsing, validation,
  * and help output for the gpio-fan-rpm utility.
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
@@ -347,4 +347,4 @@ int validate_arguments(int *gpios, size_t ngpio, int duration, int pulses, int w
     }
 
     return 0;
-} 
+}

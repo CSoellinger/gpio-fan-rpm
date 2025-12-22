@@ -1,12 +1,9 @@
 /**
- * @file args.h
- * @brief Command-line argument parsing and help functionality
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module handles command-line argument parsing, validation,
  * and help output for the gpio-fan-rpm utility.
+ *
+ * @author  CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #ifndef ARGS_H

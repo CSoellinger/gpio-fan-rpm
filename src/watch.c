@@ -2,7 +2,7 @@
  * This module handles continuous monitoring mode with parallel
  * measurement and ordered output for multiple GPIO pins.
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
@@ -15,12 +15,11 @@
 #include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
+#include <math.h>
 #include "watch.h"
-#include "gpio.h"
-#include "chip.h"
+#include "measurement_common.h"
 #include "format.h"
 #include "stats.h"
-#include <math.h>
 
 // External variable for signal handling
 extern volatile sig_atomic_t stop;
@@ -47,7 +46,7 @@ static void restore_terminal_cleanup(void *arg) {
     terminal_cleanup_t *cleanup = (terminal_cleanup_t *)arg;
     tcsetattr(STDIN_FILENO, TCSANOW, &cleanup->old_termios);
     fcntl(STDIN_FILENO, F_SETFL, cleanup->old_flags);
-    terminal_modified = 0;  // Clear flag since we restored
+    terminal_modified = 0;
 }
 
 static void* keyboard_monitor_thread(void *arg) {
@@ -57,7 +56,7 @@ static void* keyboard_monitor_thread(void *arg) {
     struct termios new_termios;
 
     if (tcgetattr(STDIN_FILENO, &cleanup_data.old_termios) != 0) {
-        return NULL; // Can't modify terminal, just return
+        return NULL;
     }
 
     cleanup_data.old_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -77,7 +76,7 @@ static void* keyboard_monitor_thread(void *arg) {
     new_termios.c_cc[VTIME] = 0;
 
     if (tcsetattr(STDIN_FILENO, TCSANOW, &new_termios) != 0) {
-        return NULL; // Can't modify terminal, just return
+        return NULL;
     }
 
     fcntl(STDIN_FILENO, F_SETFL, cleanup_data.old_flags | O_NONBLOCK);
@@ -86,7 +85,6 @@ static void* keyboard_monitor_thread(void *arg) {
 
     pthread_cleanup_push(restore_terminal_cleanup, &cleanup_data);
 
-    // Monitor for 'q' key
     while (!stop) {
         char ch;
         if (read(STDIN_FILENO, &ch, 1) == 1) {
@@ -95,10 +93,9 @@ static void* keyboard_monitor_thread(void *arg) {
                 break;
             }
         }
-        usleep(100000); // Sleep 100ms between checks
+        usleep(100000);
     }
 
-    // Pop and execute cleanup handler
     pthread_cleanup_pop(1);
 
     return NULL;
@@ -106,53 +103,27 @@ static void* keyboard_monitor_thread(void *arg) {
 
 int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
                    int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode) {
-    int chipname_allocated = 0;  // Track if we allocated chipname
+    measurement_ctx_t ctx;
 
     fprintf(stderr, "\nWatch mode started. Press 'q' to quit or Ctrl+C to interrupt.\n\n");
 
-    pthread_t *threads = calloc(ngpio, sizeof(*threads));
-    if (!threads) {
-        fprintf(stderr, "Error: memory allocation failed\n");
+    // Initialize context (allocates arrays, mutex/cond, auto-detects chip)
+    if (measurement_ctx_init(&ctx, gpios, ngpio, chipname) < 0) {
         return -1;
     }
 
-    int *finished = calloc(ngpio, sizeof(*finished));
-    double *results = calloc(ngpio, sizeof(*results));
+    // Allocate statistics array (watch-mode specific)
     rpm_stats_t *stats = calloc(ngpio, sizeof(*stats));
-
-    if (!results || !finished || !stats) {
+    if (!stats) {
         fprintf(stderr, "Error: memory allocation failed\n");
-        free(threads);
-        free(results);
-        free(finished);
-        free(stats);
+        measurement_ctx_cleanup(&ctx);
         return -1;
     }
 
-    // Initialize statistics for each GPIO
     for (size_t i = 0; i < ngpio; i++) {
         stats_init(&stats[i]);
     }
 
-    // Synchronization primitives
-    pthread_mutex_t results_mutex = PTHREAD_MUTEX_INITIALIZER;
-    pthread_cond_t all_finished = PTHREAD_COND_INITIALIZER;
-
-    // Auto-detect chip once for all GPIOs if not specified
-    if (!chipname) {
-        if (chip_auto_detect_for_name(gpios[0], &chipname) < 0) {
-            fprintf(stderr, "Error: cannot auto-detect GPIO chip\n");
-            pthread_mutex_destroy(&results_mutex);
-            pthread_cond_destroy(&all_finished);
-            free(threads);
-            free(results);
-            free(finished);
-            free(stats);
-            return -1;
-        }
-        chipname_allocated = 1;  // We allocated chipname, must free it
-    }
-    
     // Create keyboard monitor thread
     pthread_t keyboard_thread;
     int keyboard_ret = pthread_create(&keyboard_thread, NULL, keyboard_monitor_thread, NULL);
@@ -160,59 +131,45 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
         fprintf(stderr, "Warning: cannot create keyboard monitor thread: %s\n", strerror(keyboard_ret));
         fprintf(stderr, "Use Ctrl+C to quit watch mode\n");
     }
-    
-    // Create threads for each GPIO
-    for (size_t i = 0; i < ngpio; i++) {
-        thread_args_t *a = calloc(1, sizeof(*a));
-        if (!a) {
-            fprintf(stderr, "Error: memory allocation failed\n");
-            continue;
-        }
-        
-        a->gpio = gpios[i];
-        a->chipname = chipname;
-        a->duration = duration;
-        a->pulses = pulses;
-        a->warmup = warmup;
-        a->edge = edge;
-        a->debug = debug;
-        a->watch = 1; // Always true for watch mode
-        a->mode = mode;
-        a->thread_index = i;
-        a->total_threads = ngpio;
-        a->results = results;
-        a->finished = finished;
-        a->results_mutex = &results_mutex;
-        a->all_finished = &all_finished;
-        
-        int ret = pthread_create(&threads[i], NULL, gpio_thread_fn, a);
-        if (ret) {
-            fprintf(stderr, "Error: cannot create thread for GPIO %d: %s\n", 
-                    a->gpio, strerror(ret));
-            free(a);
-            threads[i] = 0;
-        }
+
+    // Set up parameters and create threads
+    measurement_params_t params = {
+        .gpios = gpios,
+        .ngpio = ngpio,
+        .duration = duration,
+        .pulses = pulses,
+        .warmup = warmup,
+        .edge = edge,
+        .debug = debug,
+        .watch = 1,  // Watch mode
+        .mode = mode
+    };
+
+    if (measurement_create_threads(&ctx, &params) < 0) {
+        free(stats);
+        measurement_ctx_cleanup(&ctx);
+        return -1;
     }
-    
+
     // Main loop for watch mode
     while (!stop) {
         // Wait for all threads to complete one measurement round
-        pthread_mutex_lock(&results_mutex);
+        pthread_mutex_lock(&ctx.results_mutex);
         while (!stop) {
             int all_done = 1;
             for (size_t i = 0; i < ngpio; i++) {
-                if (!finished[i]) {
+                if (!ctx.finished[i]) {
                     all_done = 0;
                     break;
                 }
             }
             if (all_done) break;
-            
+
             // Use timed wait to check stop flag periodically
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
-            ts.tv_sec += 1; // Wait up to 1 second
-            int wait_ret = pthread_cond_timedwait(&all_finished, &results_mutex, &ts);
+            ts.tv_sec += 1;
+            int wait_ret = pthread_cond_timedwait(&ctx.all_finished, &ctx.results_mutex, &ts);
             if (wait_ret != 0 && wait_ret != ETIMEDOUT) {
                 if (debug) {
                     fprintf(stderr, "Warning: pthread_cond_timedwait failed: %s\n",
@@ -220,12 +177,12 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
                 }
             }
         }
-        
+
         // Only output if we weren't interrupted
         if (!stop) {
             // Update statistics for each GPIO
             for (size_t i = 0; i < ngpio; i++) {
-                stats_update(&stats[i], results[i]);
+                stats_update(&stats[i], ctx.results[i]);
             }
 
             // Output results in order
@@ -236,7 +193,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
                     if (i > 0) printf(",");
                     double avg = stats_avg(&stats[i]);
                     printf("{\"gpio\":%d,\"rpm\":%d,\"min\":%d,\"max\":%d,\"avg\":%d}",
-                           gpios[i], (int)round(results[i]),
+                           gpios[i], (int)round(ctx.results[i]),
                            (int)round(stats[i].min), (int)round(stats[i].max),
                            (int)round(avg));
                 }
@@ -244,7 +201,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
             } else {
                 // Output individual results in order with stats
                 for (size_t i = 0; i < ngpio; i++) {
-                    char *output = format_output(gpios[i], results[i], &stats[i], mode, duration);
+                    char *output = format_output(gpios[i], ctx.results[i], &stats[i], mode, duration);
                     if (output) {
                         printf("%s", output);
                         free(output);
@@ -254,32 +211,23 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
             fflush(stdout);
 
             // Reset finished flags for next round
-            memset(finished, 0, ngpio * sizeof(*finished));
+            memset(ctx.finished, 0, ngpio * sizeof(*ctx.finished));
         }
-        
-        pthread_mutex_unlock(&results_mutex);
+
+        pthread_mutex_unlock(&ctx.results_mutex);
     }
-    
-    // Wait for all threads to finish
-    for (size_t i = 0; i < ngpio; i++) {
-        if (threads[i]) {
-            pthread_join(threads[i], NULL);
-        }
-    }
-    
+
+    // Wait for all measurement threads to finish
+    measurement_join_threads(&ctx);
+
     // Wait for keyboard monitor thread
     if (keyboard_ret == 0) {
         pthread_join(keyboard_thread, NULL);
     }
-    
+
     // Cleanup
-    pthread_mutex_destroy(&results_mutex);
-    pthread_cond_destroy(&all_finished);
-    free(threads);
-    free(results);
-    free(finished);
     free(stats);
-    if (chipname_allocated) free(chipname);
+    measurement_ctx_cleanup(&ctx);
 
     return 0;
-} 
+}

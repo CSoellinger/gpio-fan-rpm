@@ -2,7 +2,7 @@
  * This module provides functions for tracking min/max/average
  * RPM statistics in continuous monitoring mode.
  * 
- * @author CSoellinger
+ * @author  CSoellinger
  * @license LGPL-3.0-or-later
  */
 
