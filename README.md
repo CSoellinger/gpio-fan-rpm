@@ -2,6 +2,21 @@
 
 A cli tool for measuring fan RPM using GPIO edge detection on Linux systems.
 
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [On Linux](#on-linux)
+  - [On macOS (or Linux without dependencies)](#on-macos-or-linux-without-dependencies)
+- [Usage](#usage)
+- [Build System](#build-system)
+  - [Build Commands](#build-commands)
+- [Requirements](#requirements)
+  - [Runtime Dependencies](#runtime-dependencies)
+  - [Build Dependencies](#build-dependencies)
+- [Hardware Setup](#hardware-setup)
+- [Environment Variables](#environment-variables)
+- [Documentation](#documentation)
+- [License](#license)
+
 ## Features
 
 - Measure fan RPM via GPIO tachometer signal
@@ -90,6 +105,9 @@ make all-arch           # all architectures
 ./build.sh help         # See all options
 ./build.sh cross arm64  # Cross-compile
 ./build.sh all          # Build everything
+
+# With musl
+USE_MUSL=1 ./build.sh cross arm64
 
 # Custom version tag
 ./build.sh --tag v2.0.0 cross arm64
