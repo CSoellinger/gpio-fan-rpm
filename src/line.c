@@ -1,11 +1,8 @@
 /**
- * @file line.c
- * @brief GPIO line operations implementation
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module implements GPIO line operations
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>

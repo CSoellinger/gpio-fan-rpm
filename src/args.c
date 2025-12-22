@@ -2,6 +2,7 @@
  * This module handles command-line argument parsing, validation,
  * and help output for the gpio-fan-rpm utility.
  * 
+ * @author CSoellinger
  * @license LGPL-3.0-or-later
  */
 
@@ -29,6 +30,7 @@
 
 /**
  * Safely convert string to integer with error checking
+ * 
  * @param str String to convert
  * @param result Pointer to store result
  * @return int 0 on success, -1 on error

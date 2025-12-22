@@ -1,12 +1,9 @@
 /**
- * @file watch.c
- * @brief Watch mode functionality for continuous RPM monitoring
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module handles continuous monitoring mode with parallel
  * measurement and ordered output for multiple GPIO pins.
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
@@ -33,7 +30,11 @@ static struct termios saved_termios;
 static int saved_flags = 0;
 static volatile int terminal_modified = 0;
 
-// atexit handler to restore terminal settings on crash/exit
+typedef struct {
+    struct termios old_termios;
+    int old_flags;
+} terminal_cleanup_t;
+
 static void restore_terminal_atexit(void) {
     if (terminal_modified) {
         tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios);
@@ -42,13 +43,6 @@ static void restore_terminal_atexit(void) {
     }
 }
 
-// Cleanup data structure for terminal restoration (thread cleanup)
-typedef struct {
-    struct termios old_termios;
-    int old_flags;
-} terminal_cleanup_t;
-
-// Cleanup handler to restore terminal settings (pthread cleanup)
 static void restore_terminal_cleanup(void *arg) {
     terminal_cleanup_t *cleanup = (terminal_cleanup_t *)arg;
     tcsetattr(STDIN_FILENO, TCSANOW, &cleanup->old_termios);
@@ -56,34 +50,27 @@ static void restore_terminal_cleanup(void *arg) {
     terminal_modified = 0;  // Clear flag since we restored
 }
 
-// Function to monitor keyboard input for 'q' key
 static void* keyboard_monitor_thread(void *arg) {
     (void)arg;
 
-    // Set terminal to non-blocking mode
     terminal_cleanup_t cleanup_data;
     struct termios new_termios;
 
-    // Get current terminal settings
     if (tcgetattr(STDIN_FILENO, &cleanup_data.old_termios) != 0) {
         return NULL; // Can't modify terminal, just return
     }
 
-    // Save old flags
     cleanup_data.old_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
 
-    // Save to global state for atexit handler (protects against SIGKILL/crash)
     saved_termios = cleanup_data.old_termios;
     saved_flags = cleanup_data.old_flags;
 
-    // Register atexit handler (only once, but atexit handles duplicates)
     static int atexit_registered = 0;
     if (!atexit_registered) {
         atexit(restore_terminal_atexit);
         atexit_registered = 1;
     }
 
-    // Set non-blocking mode
     new_termios = cleanup_data.old_termios;
     new_termios.c_lflag &= ~(ICANON | ECHO);
     new_termios.c_cc[VMIN] = 0;
@@ -95,10 +82,8 @@ static void* keyboard_monitor_thread(void *arg) {
 
     fcntl(STDIN_FILENO, F_SETFL, cleanup_data.old_flags | O_NONBLOCK);
 
-    // Mark terminal as modified (for atexit handler)
     terminal_modified = 1;
 
-    // Register cleanup handler - will be called on thread cancellation or exit
     pthread_cleanup_push(restore_terminal_cleanup, &cleanup_data);
 
     // Monitor for 'q' key
@@ -123,20 +108,18 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
                    int duration, int pulses, int warmup, edge_type_t edge, int debug, output_mode_t mode) {
     int chipname_allocated = 0;  // Track if we allocated chipname
 
-    // Print watch mode info
     fprintf(stderr, "\nWatch mode started. Press 'q' to quit or Ctrl+C to interrupt.\n\n");
 
-    // Create persistent threads for watch mode
     pthread_t *threads = calloc(ngpio, sizeof(*threads));
     if (!threads) {
         fprintf(stderr, "Error: memory allocation failed\n");
         return -1;
     }
 
-    // Allocate result storage and statistics
-    double *results = calloc(ngpio, sizeof(*results));
     int *finished = calloc(ngpio, sizeof(*finished));
+    double *results = calloc(ngpio, sizeof(*results));
     rpm_stats_t *stats = calloc(ngpio, sizeof(*stats));
+
     if (!results || !finished || !stats) {
         fprintf(stderr, "Error: memory allocation failed\n");
         free(threads);

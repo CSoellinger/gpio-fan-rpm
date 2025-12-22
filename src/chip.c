@@ -1,6 +1,7 @@
 /**
  * This module implements GPIO chip operations
  * 
+ * @author CSoellinger
  * @license LGPL-3.0-or-later
  */
 

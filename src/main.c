@@ -1,12 +1,9 @@
 /**
- * @file main.c
- * @brief Main entry point for gpio-fan-rpm utility
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module orchestrates the RPM measurement process by parsing arguments,
  * setting up signal handling, and delegating to appropriate measurement modules.
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
@@ -23,32 +20,30 @@ volatile sig_atomic_t stop = 0;
 pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
- * @brief Signal handler for graceful shutdown
+ * Signal handler for graceful shutdown
  * 
  * @param sig Signal number
  */
 static void signal_handler(int sig) {
     (void)sig;
     stop = 1;
-    // Note: Do not use fprintf() here - it's not async-signal-safe
 }
 
 /**
- * @brief Main function
+ * Main function
  * 
  * @param argc Argument count
  * @param argv Argument vector
  * @return int Exit code
  */
 int main(int argc, char **argv) {
-    int duration = 2, pulses = 4, warmup = 1;
     edge_type_t edge = EDGE_BOTH;
-    char *chipname = NULL;
-    int debug = 0, watch = 0;
     output_mode_t mode = MODE_DEFAULT;
-    int *gpios = NULL;
     size_t ngpio = 0;
-    int exit_code = 0;
+    char *chipname = NULL;
+    int duration = 2, pulses = 4, warmup = 1;
+    int debug = 0, watch = 0, exit_code = 0;
+    int *gpios = NULL;
 
     // Parse command-line arguments
     int parse_result = parse_arguments(argc, argv, &gpios, &ngpio, &chipname,

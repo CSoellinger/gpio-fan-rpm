@@ -1,12 +1,9 @@
 /**
- * @file measure.c
- * @brief Single measurement functionality for RPM monitoring
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module handles single measurement mode with parallel
  * measurement and ordered output for multiple GPIO pins.
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>

@@ -1,12 +1,9 @@
 /**
- * @file stats.c
- * @brief RPM statistics tracking implementation
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- *
  * This module provides functions for tracking min/max/average
  * RPM statistics in continuous monitoring mode.
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include "stats.h"

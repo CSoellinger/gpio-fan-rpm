@@ -1,11 +1,8 @@
 /**
- * @file gpio.c
- * @brief GPIO operations for fan RPM measurement
- * @author CSoellinger
- * @date 2025
- * @license LGPL-3.0-or-later
- * 
  * This module implements GPIO operations.
+ * 
+ * @author CSoellinger
+ * @license LGPL-3.0-or-later
  */
 
 #include <stdio.h>
@@ -143,7 +140,7 @@ int gpio_read_event(gpio_context_t *ctx) {
 }
 
 /**
- * @brief Measure RPM using GPIO edge detection
+ * Measure RPM using GPIO edge detection
  *
  * This function performs a two-phase measurement:
  * 1. Warmup phase: configurable duration for fan stabilization
@@ -371,8 +368,6 @@ void* gpio_thread_fn(void *arg) {
     do {
         double rpm = gpio_measure_rpm(ctx, a->pulses, a->duration, a->warmup, a->debug);
         
-
-        
         // Don't output interrupted measurements
         if (rpm < 0.0) {
             // Interrupted during measurement, exit cleanly
@@ -405,8 +400,6 @@ void* gpio_thread_fn(void *arg) {
             }
 
             pthread_mutex_unlock(a->results_mutex);
-            
-
         } else {
             // Single GPIO - store result for main thread to output
             // This prevents double output in single measurement mode
@@ -437,5 +430,6 @@ void* gpio_thread_fn(void *arg) {
     
     gpio_cleanup(ctx);
     free(a);
+
     return NULL;
-} 
+}
