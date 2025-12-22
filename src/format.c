@@ -109,14 +109,14 @@ char* format_human_readable(int gpio, double rpm, const rpm_stats_t *stats) {
 
 char* format_output(int gpio, double rpm, const rpm_stats_t *stats, output_mode_t mode, int duration) {
     switch (mode) {
-    case MODE_NUMERIC:
-        return format_numeric(rpm);
-    case MODE_JSON:
-        return format_json(gpio, rpm, stats);
-    case MODE_COLLECTD:
-        return format_collectd(gpio, rpm, duration);
-    case MODE_DEFAULT:
-    default:
-        return format_human_readable(gpio, rpm, stats);
+        case MODE_NUMERIC:
+            return format_numeric(rpm);
+        case MODE_JSON:
+            return format_json(gpio, rpm, stats);
+        case MODE_COLLECTD:
+            return format_collectd(gpio, rpm, duration);
+        case MODE_DEFAULT:
+        default:
+            return format_human_readable(gpio, rpm, stats);
     }
 }
