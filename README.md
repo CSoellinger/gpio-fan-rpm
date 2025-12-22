@@ -100,12 +100,30 @@ See [BUILD.md](BUILD.md) for detailed build instructions.
 
 ## Requirements
 
-### Runtime (Linux)
-- Linux kernel with GPIO support
-- libgpiod v2
-- GPIO-connected fan with tachometer output
+### Runtime Dependencies
 
-### Build
+The default build produces a dynamically linked binary that requires:
+
+- **libgpiod v2** - Modern GPIO access library
+- **libc** (glibc or musl)
+- Linux kernel with GPIO support
+
+Install libgpiod on your target system:
+```bash
+# Debian/Ubuntu
+sudo apt-get install libgpiod2
+
+# Fedora/RHEL
+sudo dnf install libgpiod
+
+# Arch Linux
+sudo pacman -S libgpiod
+
+# Alpine Linux
+apk add libgpiod
+```
+
+### Build Dependencies
 - **Linux**: CMake 3.10+, libgpiod-dev, build-essential
 - **macOS**: Docker or Podman (native builds not supported)
 - **Cross-compilation**: Docker/Podman with multi-arch support

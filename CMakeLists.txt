@@ -25,7 +25,13 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Compiler flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
+
+# Release flags optimized for size
+set(CMAKE_C_FLAGS_RELEASE "-Os -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-Wl,--gc-sections -Wl,-s")
+
+# Enable Link-Time Optimization for release builds
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 
 # Option for static linking (useful for OpenWrt/embedded systems)
 option(BUILD_STATIC "Build static binary" OFF)

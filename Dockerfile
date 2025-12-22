@@ -1,5 +1,4 @@
 # Multi-architecture build container for gpio-fan-rpm
-ARG PKG_TAG=1.0.0
 FROM debian:bookworm-slim AS builder
 
 # Install build dependencies
@@ -33,10 +32,9 @@ WORKDIR /build
 COPY . /build/
 
 # Build
-ARG PKG_TAG=1.0.0
 RUN mkdir -p build && \
     cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -DPKG_TAG=${PKG_TAG} .. && \
+    cmake .. && \
     make -j$(nproc) && \
     strip gpio-fan-rpm
 

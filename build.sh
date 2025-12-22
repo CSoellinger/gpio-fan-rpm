@@ -13,6 +13,7 @@ BUILD_TYPE="${BUILD_TYPE:-Release}"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-dist}"
 PKG_TAG="${PKG_TAG:-}"
+USE_MUSL="${USE_MUSL:-0}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -70,6 +71,7 @@ Options:
     --docker        Use docker instead of podman
     --output DIR    Output directory (default: dist)
     --tag TAG       Set package version tag (e.g., v1.2.3, default: 1.0.0)
+    --musl          Build with musl libc (Alpine-based, for OpenWrt compatibility)
 
 Supported architectures:
     amd64, x86_64   - x86_64 / amd64
@@ -82,12 +84,14 @@ Examples:
     $0 all                      # Build for all architectures
     $0 --debug local            # Debug build
     $0 --tag v2.0.0 cross arm64 # Build with custom version
+    $0 --musl cross arm64       # Build with musl libc for OpenWrt
 
 Environment variables:
     BUILD_TYPE          - Release or Debug (default: Release)
     CONTAINER_ENGINE    - podman or docker
     OUTPUT_DIR          - Output directory (default: dist)
     PKG_TAG             - Package version tag (e.g., v1.2.3)
+    USE_MUSL            - Set to 1 for musl libc builds (default: 0)
 
 EOF
 }
@@ -179,6 +183,14 @@ build_cross() {
         info "Using package tag: $PKG_TAG"
     fi
 
+    # Select Dockerfile based on musl flag
+    if [ "$USE_MUSL" = "1" ]; then
+        DOCKERFILE="Dockerfile.alpine"
+        info "Using musl libc (Alpine-based build)"
+    else
+        DOCKERFILE="Dockerfile.cross"
+    fi
+
     # Check if buildx/buildah is available for docker/podman
     if [ "$CONTAINER_ENGINE" = "docker" ]; then
         if ! docker buildx version &> /dev/null; then
@@ -196,7 +208,7 @@ build_cross() {
     fi
 
     # Build for target platform
-    $BUILD_CMD -f Dockerfile.cross $BUILD_ARGS -t "gpio-fan-rpm-builder-$ARCH" .
+    $BUILD_CMD -f "$DOCKERFILE" $BUILD_ARGS -t "gpio-fan-rpm-builder-$ARCH" .
 
     # Extract binary
     mkdir -p "$OUTPUT_DIR"
@@ -252,6 +264,10 @@ while [ $# -gt 0 ]; do
         --tag)
             PKG_TAG="$2"
             shift 2
+            ;;
+        --musl)
+            USE_MUSL=1
+            shift
             ;;
         local|container|cross|all|clean|help)
             COMMAND="$1"
