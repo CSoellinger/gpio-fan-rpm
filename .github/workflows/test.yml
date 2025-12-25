@@ -9,6 +9,7 @@ jobs:
   release:
     name: Test action
     runs-on: ubuntu-latest
+    permissions: read-all
     steps:
       - name: Create Release
         run: |
