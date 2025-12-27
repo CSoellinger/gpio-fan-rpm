@@ -75,8 +75,6 @@ find_package(Threads REQUIRED)
 # Find libgpiod (Linux-specific)
 find_library(GPIOD_LIBRARY gpiod)
 
-# Note: json-c dependency removed - simple JSON now uses snprintf directly
-
 if(NOT GPIOD_LIBRARY)
     if(APPLE)
         message(WARNING "
