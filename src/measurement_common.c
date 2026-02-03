@@ -128,3 +128,14 @@ void measurement_ctx_cleanup(measurement_ctx_t *ctx) {
     // Zero out the structure
     memset(ctx, 0, sizeof(*ctx));
 }
+
+int measurement_all_done(const int *finished, size_t count) {
+    if (!finished || count == 0) return 0;
+
+    for (size_t i = 0; i < count; i++) {
+        if (!finished[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}

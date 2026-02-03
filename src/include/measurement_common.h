@@ -82,6 +82,15 @@ void measurement_join_threads(measurement_ctx_t *ctx);
  */
 void measurement_ctx_cleanup(measurement_ctx_t *ctx);
 
+/**
+ * Check if all threads have finished their current measurement
+ *
+ * @param finished Array of finished flags
+ * @param count Number of elements in array
+ * @return int 1 if all done, 0 otherwise
+ */
+int measurement_all_done(const int *finished, size_t count);
+
 #ifdef __cplusplus
 }
 #endif

@@ -9,6 +9,7 @@
 #ifndef FORMAT_H
 #define FORMAT_H
 
+#include <stddef.h>
 #include "stats.h"
 
 #ifdef __cplusplus
@@ -71,6 +72,17 @@ char* format_human_readable(int gpio, double rpm, const rpm_stats_t *stats);
  * @return char* Formatted string (caller must free), NULL on error
  */
 char* format_output(int gpio, double rpm, const rpm_stats_t *stats, output_mode_t mode, int duration);
+
+/**
+ * Format multiple GPIOs as JSON array
+ *
+ * @param gpios Array of GPIO numbers
+ * @param results Array of RPM values
+ * @param stats Optional array of statistics (NULL for basic output)
+ * @param ngpio Number of GPIOs
+ * @return char* Formatted JSON array string (caller must free), NULL on error
+ */
+char* format_json_array(const int *gpios, const double *results, const rpm_stats_t *stats, size_t ngpio);
 
 #ifdef __cplusplus
 }

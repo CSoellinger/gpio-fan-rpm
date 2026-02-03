@@ -19,11 +19,115 @@
 #include "chip.h"
 #include "line.h"
 #include "format.h"
+#include "measurement_common.h"
 
 // Global variables (extern declaration - defined in main.c)
 // Note: sig_atomic_t is included via gpio.h -> signal.h
 extern volatile sig_atomic_t stop;
 extern pthread_mutex_t print_mutex;
+
+/**
+ * Result codes for timed_event_loop
+ */
+typedef enum {
+    TIMED_LOOP_COMPLETED = 0,   /**< Timer expired normally */
+    TIMED_LOOP_INTERRUPTED = 1, /**< Interrupted by stop flag */
+    TIMED_LOOP_ERROR = -1       /**< Error occurred */
+} timed_loop_result_t;
+
+/**
+ * Run a timed event loop that counts GPIO edge events
+ *
+ * @param ctx GPIO context
+ * @param duration_sec Duration in seconds
+ * @param count Pointer to store event count (only updated if not NULL)
+ * @param debug Enable debug output
+ * @param phase_name Name for debug output (e.g., "Warmup", "Measurement")
+ * @return timed_loop_result_t Result code
+ */
+static timed_loop_result_t timed_event_loop(gpio_context_t *ctx, int duration_sec,
+                                            unsigned int *count, int debug,
+                                            const char *phase_name) {
+    if (debug && phase_name) {
+        fprintf(stderr, "%s phase: %d seconds\n", phase_name, duration_sec);
+    }
+
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+
+    int timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    if (timerfd < 0) {
+        if (debug) fprintf(stderr, "Warning: failed to create %s timer, using fallback\n",
+                          phase_name ? phase_name : "");
+        // Fallback to polling method
+        struct timespec end_ts = start_ts;
+        end_ts.tv_sec += duration_sec;
+
+        while (!stop) {
+            struct timespec current_ts;
+            clock_gettime(CLOCK_MONOTONIC, &current_ts);
+            if (current_ts.tv_sec >= end_ts.tv_sec) {
+                return TIMED_LOOP_COMPLETED;
+            }
+            int wait_result = gpio_wait_event(ctx, 100000000LL);
+            if (wait_result > 0) {
+                if (gpio_read_event(ctx) < 0) {
+                    if (debug) fprintf(stderr, "Warning: error reading event\n");
+                    break;
+                }
+                if (count) (*count)++;
+            }
+        }
+        return stop ? TIMED_LOOP_INTERRUPTED : TIMED_LOOP_COMPLETED;
+    }
+
+    // Set timer to expire after duration_sec seconds
+    struct itimerspec timer_spec = {0};
+    timer_spec.it_value.tv_sec = duration_sec;
+    if (timerfd_settime(timerfd, 0, &timer_spec, NULL) < 0) {
+        if (debug) fprintf(stderr, "Warning: failed to arm %s timer\n",
+                          phase_name ? phase_name : "");
+        close(timerfd);
+        return TIMED_LOOP_ERROR;
+    }
+
+    // Use poll() on both GPIO event_fd and timerfd
+    struct pollfd pfds[2];
+    pfds[0].fd = ctx->event_fd;
+    pfds[0].events = POLLIN;
+    pfds[1].fd = timerfd;
+    pfds[1].events = POLLIN;
+
+    timed_loop_result_t result = TIMED_LOOP_INTERRUPTED;
+    while (!stop) {
+        int ret = poll(pfds, 2, 100);  // 100ms timeout for stop check
+        if (ret < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+
+        // Check if timer expired
+        if (pfds[1].revents & POLLIN) {
+            uint64_t expirations;
+            ssize_t n = read(timerfd, &expirations, sizeof(expirations));
+            (void)n;  // Intentionally ignoring read result (just consuming timer)
+            result = TIMED_LOOP_COMPLETED;
+            break;
+        }
+
+        // Read GPIO events if available
+        if (pfds[0].revents & POLLIN) {
+            if (gpio_read_event(ctx) < 0) {
+                if (debug) fprintf(stderr, "Warning: error reading event\n");
+                break;
+            }
+            if (count) (*count)++;
+        }
+    }
+
+    close(timerfd);
+    return result;
+}
 
 gpio_context_t* gpio_init(int gpio, const char *chipname) {
     gpio_context_t *ctx = calloc(1, sizeof(*ctx));
@@ -145,7 +249,7 @@ int gpio_read_event(gpio_context_t *ctx) {
  * This function performs a two-phase measurement:
  * 1. Warmup phase: configurable duration for fan stabilization
  * 2. Measurement phase: (duration - warmup) seconds for actual RPM calculation
- * 
+ *
  * @param ctx GPIO context
  * @param pulses_per_rev Pulses per revolution
  * @param duration Total measurement duration
@@ -156,180 +260,55 @@ int gpio_read_event(gpio_context_t *ctx) {
 double gpio_measure_rpm(gpio_context_t *ctx, int pulses_per_rev, int duration, int warmup, int debug) {
     if (!ctx) return 0.0;
 
-    struct timespec start_ts;
-    unsigned int count = 0;
-    int warmup_duration = warmup;
-    int measurement_duration = duration - warmup_duration;
-    int measurement_completed = 0;
-    
+    int measurement_duration = duration - warmup;
+
     // Warmup phase (skip if warmup is 0)
-    if (warmup_duration > 0) {
-        clock_gettime(CLOCK_MONOTONIC, &start_ts);
-        if (debug) {
-            fprintf(stderr, "Warmup phase: %d seconds\n", warmup_duration);
-        }
-
-        // Create timer for warmup phase
-        int warmup_timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-        if (warmup_timerfd < 0) {
-            if (debug) fprintf(stderr, "Warning: failed to create warmup timer, using fallback\n");
-            // Fallback to old method
-            struct timespec warmup_end_ts = start_ts;
-            warmup_end_ts.tv_sec += warmup_duration;
-            while (!stop) {
-                struct timespec current_ts;
-                clock_gettime(CLOCK_MONOTONIC, &current_ts);
-                if (current_ts.tv_sec >= warmup_end_ts.tv_sec) break;
-                int wait_result = gpio_wait_event(ctx, 100000000LL);
-                if (wait_result > 0) gpio_read_event(ctx);
-            }
-        } else {
-            // Set timer to expire after warmup_duration seconds
-            struct itimerspec timer_spec = {0};
-            timer_spec.it_value.tv_sec = warmup_duration;
-            if (timerfd_settime(warmup_timerfd, 0, &timer_spec, NULL) < 0) {
-                if (debug) fprintf(stderr, "Warning: failed to arm warmup timer\n");
-                close(warmup_timerfd);
-                return -1.0;
-            }
-
-            // Use poll() on both GPIO event_fd and timerfd
-            struct pollfd pfds[2];
-            pfds[0].fd = ctx->event_fd;
-            pfds[0].events = POLLIN;
-            pfds[1].fd = warmup_timerfd;
-            pfds[1].events = POLLIN;
-
-            while (!stop) {
-                int ret = poll(pfds, 2, 100);  // 100ms timeout for stop check
-                if (ret < 0) {
-                    if (errno == EINTR) continue;
-                    break;
-                }
-
-                // Check if timer expired
-                if (pfds[1].revents & POLLIN) {
-                    uint64_t expirations;
-                    ssize_t ret = read(warmup_timerfd, &expirations, sizeof(expirations));
-                    (void)ret;  // Intentionally ignoring read result (just consuming timer)
-                    break;  // Warmup completed
-                }
-
-                // Read GPIO events if available (discard during warmup)
-                if (pfds[0].revents & POLLIN) {
-                    gpio_read_event(ctx);
-                }
-            }
-            close(warmup_timerfd);
-        }
-
-        // Check if interrupted during warmup
-        if (stop) {
-            return -1.0; // Interrupted during warmup
-        }
-    }
-    
-    // Measurement phase - run for full measurement duration
-    count = 0;
-    clock_gettime(CLOCK_MONOTONIC, &start_ts);
-    if (debug) {
-        fprintf(stderr, "Measurement phase: %d seconds\n", measurement_duration);
-    }
-
-    // Create timer for measurement phase
-    int measure_timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-    if (measure_timerfd < 0) {
-        if (debug) fprintf(stderr, "Warning: failed to create measurement timer, using fallback\n");
-        // Fallback to old method
-        struct timespec measurement_end_ts = start_ts;
-        measurement_end_ts.tv_sec += measurement_duration;
-        while (!stop) {
-            struct timespec current_ts;
-            clock_gettime(CLOCK_MONOTONIC, &current_ts);
-            if (current_ts.tv_sec >= measurement_end_ts.tv_sec) {
-                measurement_completed = 1;
-                break;
-            }
-            int wait_result = gpio_wait_event(ctx, 1000000000LL);
-            if (wait_result <= 0) continue;
-            if (gpio_read_event(ctx) < 0) {
-                if (debug) fprintf(stderr, "Warning: error reading event during measurement\n");
-                break;
-            }
-            count++;
-        }
-    } else {
-        // Set timer to expire after measurement_duration seconds
-        struct itimerspec timer_spec = {0};
-        timer_spec.it_value.tv_sec = measurement_duration;
-        if (timerfd_settime(measure_timerfd, 0, &timer_spec, NULL) < 0) {
-            if (debug) fprintf(stderr, "Warning: failed to arm measurement timer\n");
-            close(measure_timerfd);
+    if (warmup > 0) {
+        timed_loop_result_t warmup_result = timed_event_loop(ctx, warmup, NULL, debug, "Warmup");
+        if (warmup_result == TIMED_LOOP_INTERRUPTED) {
             return -1.0;
         }
-
-        // Use poll() on both GPIO event_fd and timerfd
-        struct pollfd pfds[2];
-        pfds[0].fd = ctx->event_fd;
-        pfds[0].events = POLLIN;
-        pfds[1].fd = measure_timerfd;
-        pfds[1].events = POLLIN;
-
-        while (!stop) {
-            int ret = poll(pfds, 2, 100);  // 100ms timeout for stop check
-            if (ret < 0) {
-                if (errno == EINTR) continue;
-                break;
-            }
-
-            // Check if timer expired
-            if (pfds[1].revents & POLLIN) {
-                uint64_t expirations;
-                ssize_t ret = read(measure_timerfd, &expirations, sizeof(expirations));
-                (void)ret;  // Intentionally ignoring read result (just consuming timer)
-                measurement_completed = 1;
-                break;  // Measurement completed
-            }
-
-            // Read GPIO events if available
-            if (pfds[0].revents & POLLIN) {
-                if (gpio_read_event(ctx) < 0) {
-                    if (debug) fprintf(stderr, "Warning: error reading event during measurement\n");
-                    break;
-                }
-                count++;
-            }
+        if (warmup_result == TIMED_LOOP_ERROR) {
+            return -1.0;
         }
-        close(measure_timerfd);
     }
-    
-    // If we were interrupted before completing the measurement, return special value
-    if (!measurement_completed && stop) {
-        return -1.0; // Special value to indicate interruption
+
+    // Measurement phase - run for full measurement duration
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+
+    unsigned int count = 0;
+    timed_loop_result_t measure_result = timed_event_loop(ctx, measurement_duration, &count, debug, "Measurement");
+
+    if (measure_result == TIMED_LOOP_INTERRUPTED) {
+        return -1.0;
     }
-    
+    if (measure_result == TIMED_LOOP_ERROR) {
+        return -1.0;
+    }
+
     // Get current time for elapsed calculation
     struct timespec current_ts;
     clock_gettime(CLOCK_MONOTONIC, &current_ts);
-    
-    double elapsed = (current_ts.tv_sec - start_ts.tv_sec) + 
+
+    double elapsed = (current_ts.tv_sec - start_ts.tv_sec) +
                      (current_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
-    
+
     if (elapsed <= 0.0) return 0.0;
-    
+
     // Calculate RPM: (pulses / pulses_per_rev) / time * 60
     // This is equivalent to: frequency(Hz) * 60 / pulses_per_rev
     double revs = (double)count / pulses_per_rev;
     double rpm = revs / elapsed * 60.0;
-    
+
     if (debug) {
-        fprintf(stderr, "Counted %u pulses in %.3f s, RPM=%.1f\n", 
+        fprintf(stderr, "Counted %u pulses in %.3f s, RPM=%.1f\n",
                 count, elapsed, rpm);
         fprintf(stderr, "  Pulses per revolution: %d\n", pulses_per_rev);
         fprintf(stderr, "  Revolutions: %.2f\n", revs);
         fprintf(stderr, "  Frequency: %.2f Hz\n", count / elapsed);
     }
-    
+
     return rpm;
 }
 
@@ -375,24 +354,16 @@ void* gpio_thread_fn(void *arg) {
         }
         
         // For multiple GPIOs, store result and signal completion
-        if (a->total_threads > 1 && a->results && a->finished && 
+        if (a->total_threads > 1 && a->results && a->finished &&
             a->results_mutex && a->all_finished) {
             pthread_mutex_lock(a->results_mutex);
-            
+
             // Store result
             a->results[a->thread_index] = rpm;
             a->finished[a->thread_index] = 1;
-            
-            // Check if all threads finished
-            int all_done = 1;
-            for (size_t i = 0; i < a->total_threads; i++) {
-                if (!a->finished[i]) {
-                    all_done = 0;
-                    break;
-                }
-            }
-            
-            if (all_done) {
+
+            // Check if all threads finished and signal if so
+            if (measurement_all_done(a->finished, a->total_threads)) {
                 int ret = pthread_cond_signal(a->all_finished);
                 if (ret != 0) {
                     fprintf(stderr, "Warning: pthread_cond_signal failed: %s\n", strerror(ret));

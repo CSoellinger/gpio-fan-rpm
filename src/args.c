@@ -169,7 +169,14 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
                 fprintf(stderr, "\nError: --gpio requires a number\n\n");
                 return -1;
             }
-            
+
+            // Check GPIO count limit before allocating
+            if (*ngpio >= 10) {
+                fprintf(stderr, "\nError: too many GPIOs specified (max 10)\n\n");
+                fprintf(stderr, "Try: %s --help\n\n", argv[0]);
+                return -1;
+            }
+
             int gpio_val;
             if (safe_str_to_int(optarg, &gpio_val) != 0) {
                 fprintf(stderr, "\nError: GPIO pin must be a valid number, got '%s'\n\n", optarg);
@@ -306,12 +313,6 @@ int parse_arguments(int argc, char **argv, int **gpios, size_t *ngpio,
             print_usage(argv[0]);
             return -1;
         }
-    }
-
-    // Check GPIO count limit after parsing (to prevent resource exhaustion)
-    if (*ngpio > 10) {
-        fprintf(stderr, "Warning: Too many GPIOs (%zu), limiting to 10\n", *ngpio);
-        *ngpio = 10;
     }
 
     return 0;

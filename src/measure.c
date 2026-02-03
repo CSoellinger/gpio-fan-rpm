@@ -8,7 +8,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include "measure.h"
 #include "measurement_common.h"
 #include "format.h"
@@ -50,18 +49,11 @@ int run_single_measurement(int *gpios, size_t ngpio, char *chipname,
     // Output results in order
     if (mode == MODE_JSON && ngpio > 1) {
         // Output as JSON array
-        printf("[");
-        int first = 1;
-        for (size_t i = 0; i < ngpio; i++) {
-            // Skip interrupted measurements (negative values indicate interruption)
-            if (ctx.results[i] < 0.0) {
-                continue;
-            }
-            if (!first) printf(",");
-            printf("{\"gpio\":%d,\"rpm\":%d}", gpios[i], (int)round(ctx.results[i]));
-            first = 0;
+        char *output = format_json_array(gpios, ctx.results, NULL, ngpio);
+        if (output) {
+            printf("%s", output);
+            free(output);
         }
-        printf("]\n");
     } else {
         // Output individual results in order
         for (size_t i = 0; i < ngpio; i++) {

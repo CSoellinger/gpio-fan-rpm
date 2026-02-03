@@ -67,20 +67,18 @@ char* format_collectd(int gpio, double rpm, int duration) {
 
     time_t now = time(NULL);
 
-    char tmp[COLLECTD_BUFFER_SIZE];
-    int written = snprintf(tmp, sizeof(tmp),
+    char *buf = malloc(COLLECTD_BUFFER_SIZE);
+    if (!buf) return NULL;
+
+    int written = snprintf(buf, COLLECTD_BUFFER_SIZE,
         "PUTVAL \"%s/gpio-fan-%d/gauge-rpm\" interval=%d %ld:%.0f\n",
         host, gpio, duration, (long)now, rpm);
 
-    if (written < 0 || written >= (int)sizeof(tmp)) {
+    if (written < 0 || written >= COLLECTD_BUFFER_SIZE) {
+        free(buf);
         return NULL;
     }
 
-    char *buf = malloc(written + 1);
-    if (!buf) return NULL;
-
-    memcpy(buf, tmp, written);
-    buf[written] = '\0';
     return buf;
 }
 
@@ -119,4 +117,57 @@ char* format_output(int gpio, double rpm, const rpm_stats_t *stats, output_mode_
         default:
             return format_human_readable(gpio, rpm, stats);
     }
+}
+
+char* format_json_array(const int *gpios, const double *results, const rpm_stats_t *stats, size_t ngpio) {
+    if (!gpios || !results || ngpio == 0) return NULL;
+
+    // Estimate buffer size: ~80 chars per entry with stats, ~40 without
+    size_t buf_size = (stats ? 80 : 40) * ngpio + 16;
+    char *buf = malloc(buf_size);
+    if (!buf) return NULL;
+
+    size_t pos = 0;
+    buf[pos++] = '[';
+
+    int first = 1;
+    for (size_t i = 0; i < ngpio; i++) {
+        // Skip interrupted measurements (negative values indicate interruption)
+        if (results[i] < 0.0) continue;
+
+        if (!first) {
+            buf[pos++] = ',';
+        }
+        first = 0;
+
+        int written;
+        if (stats) {
+            double avg = stats_avg(&stats[i]);
+            written = snprintf(buf + pos, buf_size - pos,
+                "{\"gpio\":%d,\"rpm\":%d,\"min\":%d,\"max\":%d,\"avg\":%d}",
+                gpios[i], (int)round(results[i]),
+                (int)round(stats[i].min), (int)round(stats[i].max),
+                (int)round(avg));
+        } else {
+            written = snprintf(buf + pos, buf_size - pos,
+                "{\"gpio\":%d,\"rpm\":%d}",
+                gpios[i], (int)round(results[i]));
+        }
+
+        if (written < 0 || (size_t)written >= buf_size - pos) {
+            free(buf);
+            return NULL;
+        }
+        pos += written;
+    }
+
+    if (pos + 2 >= buf_size) {
+        free(buf);
+        return NULL;
+    }
+    buf[pos++] = ']';
+    buf[pos++] = '\n';
+    buf[pos] = '\0';
+
+    return buf;
 }

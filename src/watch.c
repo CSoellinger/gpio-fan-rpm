@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
-#include <math.h>
 #include "watch.h"
 #include "measurement_common.h"
 #include "format.h"
@@ -156,14 +155,7 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
         // Wait for all threads to complete one measurement round
         pthread_mutex_lock(&ctx.results_mutex);
         while (!stop) {
-            int all_done = 1;
-            for (size_t i = 0; i < ngpio; i++) {
-                if (!ctx.finished[i]) {
-                    all_done = 0;
-                    break;
-                }
-            }
-            if (all_done) break;
+            if (measurement_all_done(ctx.finished, ngpio)) break;
 
             // Use timed wait to check stop flag periodically
             struct timespec ts;
@@ -188,16 +180,11 @@ int run_watch_mode(int *gpios, size_t ngpio, char *chipname,
             // Output results in order
             if (mode == MODE_JSON && ngpio > 1) {
                 // Output as JSON array with stats
-                printf("[");
-                for (size_t i = 0; i < ngpio; i++) {
-                    if (i > 0) printf(",");
-                    double avg = stats_avg(&stats[i]);
-                    printf("{\"gpio\":%d,\"rpm\":%d,\"min\":%d,\"max\":%d,\"avg\":%d}",
-                           gpios[i], (int)round(ctx.results[i]),
-                           (int)round(stats[i].min), (int)round(stats[i].max),
-                           (int)round(avg));
+                char *output = format_json_array(gpios, ctx.results, stats, ngpio);
+                if (output) {
+                    printf("%s", output);
+                    free(output);
                 }
-                printf("]\n");
             } else {
                 // Output individual results in order with stats
                 for (size_t i = 0; i < ngpio; i++) {

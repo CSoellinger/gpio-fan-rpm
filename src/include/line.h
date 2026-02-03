@@ -29,7 +29,6 @@ typedef enum {
  */
 typedef struct line_request {
     struct gpiod_line_request *request;
-    struct gpiod_edge_event_buffer *event_buffer;  /**< Reusable event buffer */
     int event_fd;
     int gpio;
 } line_request_t;
@@ -44,30 +43,6 @@ typedef struct line_request {
  * @return line_request_t* Line request context or NULL on error
  */
 line_request_t* line_request_events(struct gpiod_chip *chip, int gpio, const char *consumer, edge_type_t edge);
-
-/**
- * Release line request
- *
- * @param req Line request context
- */
-void line_release(line_request_t *req);
-
-/**
- * Wait for edge event
- *
- * @param req Line request context
- * @param timeout_ns Timeout in nanoseconds
- * @return int 0 on timeout, 1 on event, -1 on error
- */
-int line_wait_event(line_request_t *req, int64_t timeout_ns);
-
-/**
- * Read edge event
- *
- * @param req Line request context
- * @return int Number of events read, 0 if none, -1 on error
- */
-int line_read_event(line_request_t *req);
 
 #ifdef __cplusplus
 }
